@@ -1,0 +1,109 @@
+name: Release
+
+# Publishes a versioned GitHub release with per-OS packages and their
+# .sha256 sidecars — the assets DesktopUpdateChecker looks for.
+# Trigger: push a tag like v1.1.0. The tag must match packageVersion in
+# app-desktop/build.gradle.kts (and AppState.currentVersion).
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  version-gate:
+    name: Version gate
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify tag matches packageVersion
+        id: check
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION=$(grep -o 'packageVersion = "[^"]*"' app-desktop/build.gradle.kts | head -1 | cut -d'"' -f2)
+          echo "tag=$TAG_VERSION package=$PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag v$TAG_VERSION does not match packageVersion $PKG_VERSION"
+            exit 1
+          fi
+          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+  test:
+    name: Unit tests
+    needs: version-gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+      - name: Run unit tests
+        run: gradle :shared:core-parser:test :shared:core-domain:test :core-data-desktop:jvmTest --stacktrace
+
+  package:
+    name: Package (${{ matrix.os }})
+    needs: [version-gate, test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.10.2"
+      - name: Package distribution for current OS
+        run: gradle :app-desktop:packageDistributionForCurrentOS --stacktrace
+      - name: Collect and hash assets
+        shell: bash
+        env:
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        run: |
+          mkdir -p release-assets
+          find app-desktop/build/compose/binaries/main -type f \( -name "*.exe" -o -name "*.msi" -o -name "*.deb" -o -name "*.dmg" \) | while read -r f; do
+            ext="${f##*.}"
+            dest="release-assets/CineSort-${VERSION}.${ext}"
+            cp "$f" "$dest"
+            (cd release-assets && sha256sum "CineSort-${VERSION}.${ext}" > "CineSort-${VERSION}.${ext}.sha256")
+          done
+          ls -la release-assets
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: release-assets/
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    needs: [version-gate, package]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version-gate.outputs.version }}
+        run: |
+          gh release create "v${VERSION}" release-assets/* \
+            --repo "${{ github.repository }}" \
+            --title "CineSort Desktop v${VERSION}" \
+            --notes "CineSort Desktop v${VERSION} — Windows (.exe/.msi), Linux (.deb) and macOS (.dmg, unsigned) packages with SHA-256 sidecars."
