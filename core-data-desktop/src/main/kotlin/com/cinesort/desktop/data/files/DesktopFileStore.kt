@@ -137,17 +137,35 @@ class DesktopFileStore {
     }
 
     /**
-     * The cross-volume path: stream-copy to `<target>.cinesort-part`
-     * hashing the source as it flows, verify the copied size, re-read
-     * the partial and compare SHA-256, rename to [target], then delete
-     * the source. On any failure the partial is deleted and the source
-     * survives.
+     * The cross-volume path: verified copy (see [copyVerified]), then
+     * delete the source. On any failure the source survives.
      */
     internal suspend fun copyVerifiedThenDeleteSource(
         source: Path,
         target: Path,
         onProgress: (copiedBytes: Long) -> Unit = {},
     ) {
+        copyVerified(source, target, onProgress)
+        Files.delete(source)
+    }
+
+    /**
+     * Stream-copies [source] to [target] via a `<target>.cinesort-part`
+     * partial, hashing the source as it flows; verifies the copied size,
+     * re-reads the partial and compares SHA-256, then renames the
+     * partial to [target]. The source is NOT deleted (callers that move
+     * delete it themselves after this returns, mirroring the gateway
+     * contract). On any failure the partial is deleted and the source
+     * survives. [target] must not exist yet.
+     */
+    suspend fun copyVerified(
+        source: Path,
+        target: Path,
+        onProgress: (copiedBytes: Long) -> Unit = {},
+    ) {
+        if (Files.exists(target)) {
+            throw IOException("destination already exists: $target")
+        }
         val sourceSize = Files.size(source)
         val partial = target.resolveSibling(target.fileName.toString() + PART_SUFFIX)
         Files.deleteIfExists(partial)
@@ -198,7 +216,6 @@ class DesktopFileStore {
             runCatching { Files.deleteIfExists(partial) }
             throw e
         }
-        Files.delete(source)
     }
 
     private suspend fun sha256Of(path: Path): ByteArray {
