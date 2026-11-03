@@ -105,7 +105,7 @@ fun SetupScreen(state: AppState) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedButton(
-                    onClick = { pickDirectory("Choose the library folder")?.let { state.destination = it } },
+                    onClick = { pickDirectory("Choose the library folder")?.let(state::chooseDestination) },
                 ) { Text("Choose") }
             }
         }

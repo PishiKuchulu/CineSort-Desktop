@@ -9,6 +9,8 @@ import com.cinesort.core.domain.execute.ExecutionReport
 import com.cinesort.core.domain.execute.UndoReport
 import com.cinesort.core.domain.journal.RunRecord
 import com.cinesort.desktop.data.db.RoomJournalStore
+import com.cinesort.desktop.data.settings.DesktopSettingsStore
+import kotlinx.coroutines.flow.first
 import com.cinesort.desktop.data.db.createDesktopDatabase
 import com.cinesort.desktop.data.files.DesktopStorageGateway
 import com.cinesort.desktop.data.session.DesktopOrganizeSession
@@ -30,9 +32,10 @@ enum class Phase { SETUP, SCANNING, PREVIEW, RUNNING, REPORT, HISTORY }
 class AppState(
     private val scope: CoroutineScope,
 ) {
-    private val database = createDesktopDatabase(
-        Paths.get(System.getProperty("user.home"), ".cinesort-desktop", "cinesort.db"),
-    )
+    private val dataDir: Path =
+        Paths.get(System.getProperty("user.home"), ".cinesort-desktop")
+    private val database = createDesktopDatabase(dataDir.resolve("cinesort.db"))
+    private val settingsStore = DesktopSettingsStore(dataDir)
     private val journal = RoomJournalStore(database.runDao())
     private val session = DesktopOrganizeSession(DesktopStorageGateway(), journal)
 
@@ -60,12 +63,44 @@ class AppState(
 
     val canScan: Boolean get() = sources.isNotEmpty() && destination != null
 
+    init {
+        // Restore the library layout from the last session.
+        scope.launch {
+            runCatching {
+                val saved = withContext(Dispatchers.IO) {
+                    settingsStore.sources.first() to settingsStore.destination.first()
+                }
+                sources.clear()
+                sources.addAll(saved.first)
+                destination = saved.second
+            }
+        }
+    }
+
     fun addSource(path: Path) {
-        if (path !in sources) sources.add(path)
+        if (path !in sources) {
+            sources.add(path)
+            persistSources()
+        }
     }
 
     fun removeSource(path: Path) {
         sources.remove(path)
+        persistSources()
+    }
+
+    fun chooseDestination(path: Path) {
+        destination = path
+        scope.launch {
+            withContext(Dispatchers.IO) { settingsStore.setDestination(path) }
+        }
+    }
+
+    private fun persistSources() {
+        val snapshot = sources.toList()
+        scope.launch {
+            withContext(Dispatchers.IO) { settingsStore.setSources(snapshot) }
+        }
     }
 
     fun scan() {
