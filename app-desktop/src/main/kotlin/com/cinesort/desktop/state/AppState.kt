@@ -218,7 +218,7 @@ class AppState(
         scope.launch { withContext(Dispatchers.IO) { settingsStore.setOmdbKey(value) } }
     }
 
-    fun setDownloadPosters(value: Boolean) {
+    fun updateDownloadPosters(value: Boolean) {
         downloadPosters = value
         scope.launch { withContext(Dispatchers.IO) { settingsStore.setDownloadPosters(value) } }
     }

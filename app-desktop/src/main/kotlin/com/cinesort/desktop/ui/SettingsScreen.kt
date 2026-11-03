@@ -115,7 +115,7 @@ fun SettingsScreen(state: AppState) {
                 }
                 Switch(
                     checked = state.downloadPosters,
-                    onCheckedChange = state::setDownloadPosters,
+                    onCheckedChange = state::updateDownloadPosters,
                 )
             }
         }
