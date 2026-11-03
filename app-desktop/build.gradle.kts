@@ -29,6 +29,10 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation(compose.material3)
                 implementation(libs.kotlinx.coroutines.core)
+                // AppState calls Room-generated DAO methods directly, so
+                // Room's runtime must be on the app's compile classpath too.
+                implementation(libs.room.runtime)
+                implementation(libs.sqlite.bundled)
             }
         }
     }

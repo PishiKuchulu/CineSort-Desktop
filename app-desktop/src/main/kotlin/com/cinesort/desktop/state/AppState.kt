@@ -61,11 +61,11 @@ class AppState(
     val canScan: Boolean get() = sources.isNotEmpty() && destination != null
 
     fun addSource(path: Path) {
-        if (path !in sources) sources += path
+        if (path !in sources) sources.add(path)
     }
 
     fun removeSource(path: Path) {
-        sources -= path
+        sources.remove(path)
     }
 
     fun scan() {
@@ -80,7 +80,7 @@ class AppState(
             }.onSuccess { result ->
                 plan = result
                 deselected.clear()
-                deselected += result.items.filter { !it.selected }.map { it.id }
+                deselected.addAll(result.items.filter { !it.selected }.map { it.id })
                 inspectedItemId = result.items.firstOrNull()?.id
                 phase = Phase.PREVIEW
             }.onFailure {
@@ -91,7 +91,7 @@ class AppState(
     }
 
     fun toggleSelected(itemId: String) {
-        if (itemId in deselected) deselected -= itemId else deselected += itemId
+        if (itemId in deselected) deselected.remove(itemId) else deselected.add(itemId)
     }
 
     fun execute() {
