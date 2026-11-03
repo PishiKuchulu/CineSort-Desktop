@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // Room 2.6.1 and DataStore 1.1.1 publish their JVM variants only through
@@ -23,6 +24,11 @@ kotlin {
                 implementation(libs.room.runtime)
                 implementation(libs.sqlite.bundled)
                 implementation(libs.datastore.preferences.core)
+                implementation(libs.retrofit)
+                implementation(libs.retrofit.kotlinx.serialization)
+                implementation(libs.okhttp)
+                implementation(libs.okhttp.logging)
+                implementation(libs.kotlinx.serialization.json)
             }
         }
         val jvmTest by getting {
@@ -30,6 +36,7 @@ kotlin {
             dependencies {
                 implementation(libs.junit.jupiter)
                 implementation(libs.kotlinx.coroutines.test)
+                implementation(libs.okhttp.mockwebserver)
             }
         }
     }
