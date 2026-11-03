@@ -28,7 +28,10 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Deb, TargetFormat.Dmg)
             packageName = "CineSort"
-            packageVersion = "0.1.0"
+            // macOS DMG validation requires MAJOR > 0, so the desktop
+            // line starts at 1.0.0 (a 0.x packageVersion fails the
+            // whole build at configuration time — CI run #1).
+            packageVersion = "1.0.0"
             description = "Organize movie and series files into a clean library"
             vendor = "PishiKuchulu"
         }
