@@ -21,6 +21,7 @@ kotlin {
                 implementation(project(":shared:core-parser"))
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.room.runtime)
+                implementation(libs.sqlite.bundled)
                 implementation(libs.datastore.preferences.core)
             }
         }
