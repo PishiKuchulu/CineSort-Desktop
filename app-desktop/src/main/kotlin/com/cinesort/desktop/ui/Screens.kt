@@ -114,6 +114,7 @@ fun SetupScreen(state: AppState) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = state::scan, enabled = state.canScan) { Text("Scan & preview") }
             OutlinedButton(onClick = state::showHistory) { Text("History") }
+            OutlinedButton(onClick = state::showSettings) { Text("Settings") }
         }
         state.error?.let {
             Spacer(Modifier.height(16.dp))

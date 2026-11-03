@@ -3,6 +3,7 @@ package com.cinesort.desktop.data.settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -36,6 +37,33 @@ class DesktopSettingsStore(
         prefs[DESTINATION]?.let { Path.of(it) }
     }
 
+    /**
+     * Provider API keys. NOTE: unlike Android (Tink-encrypted), the
+     * desktop v1 stores keys in the local DataStore file unencrypted —
+     * encryption at rest is a tracked hardening follow-up.
+     */
+    val tmdbKey: Flow<String?> = dataStore.data.map { it[TMDB_KEY] }
+    val omdbKey: Flow<String?> = dataStore.data.map { it[OMDB_KEY] }
+
+    /** Save poster.jpg into organized folders (Android default: off). */
+    val downloadPosters: Flow<Boolean> = dataStore.data.map { it[DOWNLOAD_POSTERS] ?: false }
+
+    suspend fun setDownloadPosters(value: Boolean) {
+        dataStore.edit { prefs -> prefs[DOWNLOAD_POSTERS] = value }
+    }
+
+    suspend fun setTmdbKey(key: String?) {
+        dataStore.edit { prefs ->
+            if (key.isNullOrBlank()) prefs.remove(TMDB_KEY) else prefs[TMDB_KEY] = key.trim()
+        }
+    }
+
+    suspend fun setOmdbKey(key: String?) {
+        dataStore.edit { prefs ->
+            if (key.isNullOrBlank()) prefs.remove(OMDB_KEY) else prefs[OMDB_KEY] = key.trim()
+        }
+    }
+
     suspend fun setSources(paths: List<Path>) {
         dataStore.edit { prefs ->
             prefs[SOURCES] = paths.map { it.toString() }.toSet()
@@ -52,5 +80,8 @@ class DesktopSettingsStore(
         const val SETTINGS_FILE = "settings.preferences_pb"
         val SOURCES = stringSetPreferencesKey("sources")
         val DESTINATION = stringPreferencesKey("destination")
+        val TMDB_KEY = stringPreferencesKey("tmdb_key")
+        val OMDB_KEY = stringPreferencesKey("omdb_key")
+        val DOWNLOAD_POSTERS = booleanPreferencesKey("download_posters")
     }
 }

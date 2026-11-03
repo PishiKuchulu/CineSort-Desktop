@@ -13,7 +13,10 @@ import com.cinesort.desktop.data.settings.DesktopSettingsStore
 import kotlinx.coroutines.flow.first
 import com.cinesort.desktop.data.db.createDesktopDatabase
 import com.cinesort.desktop.data.files.DesktopStorageGateway
+import com.cinesort.desktop.data.metadata.ApiKeys
+import com.cinesort.desktop.data.metadata.DesktopMetadataService
 import com.cinesort.desktop.data.session.DesktopOrganizeSession
+import com.cinesort.desktop.data.work.DesktopPosterPhase
 import com.cinesort.desktop.data.session.SessionPlan
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -22,7 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-enum class Phase { SETUP, SCANNING, PREVIEW, RUNNING, REPORT, HISTORY }
+enum class Phase { SETUP, SCANNING, PREVIEW, RUNNING, REPORT, HISTORY, SETTINGS }
 
 /**
  * The window's state holder: owns the session, the persistent journal
@@ -37,7 +40,10 @@ class AppState(
     private val database = createDesktopDatabase(dataDir.resolve("cinesort.db"))
     private val settingsStore = DesktopSettingsStore(dataDir)
     private val journal = RoomJournalStore(database.runDao())
-    private val session = DesktopOrganizeSession(DesktopStorageGateway(), journal)
+    private val metadataService = DesktopMetadataService()
+    private val gateway = DesktopStorageGateway()
+    private val session = DesktopOrganizeSession(gateway, journal, metadataService)
+    private val posterPhase = DesktopPosterPhase(gateway, journal)
 
     var phase by mutableStateOf(Phase.SETUP)
         private set
@@ -61,6 +67,13 @@ class AppState(
     var history by mutableStateOf<List<RunRecord>>(emptyList())
         private set
 
+    var tmdbKey by mutableStateOf("")
+    var omdbKey by mutableStateOf("")
+    var downloadPosters by mutableStateOf(false)
+        private set
+    var keyTestResult by mutableStateOf<String?>(null)
+        private set
+
     val canScan: Boolean get() = sources.isNotEmpty() && destination != null
 
     init {
@@ -73,6 +86,16 @@ class AppState(
                 sources.clear()
                 sources.addAll(saved.first)
                 destination = saved.second
+                runCatching {
+                    val keys = withContext(Dispatchers.IO) {
+                        settingsStore.tmdbKey.first() to settingsStore.omdbKey.first()
+                    }
+                    tmdbKey = keys.first.orEmpty()
+                    omdbKey = keys.second.orEmpty()
+                    downloadPosters = withContext(Dispatchers.IO) {
+                        settingsStore.downloadPosters.first()
+                    }
+                }
             }
         }
     }
@@ -110,7 +133,7 @@ class AppState(
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    session.scanAndPlan(sources.toList(), dest)
+                    session.scanAndPlan(sources.toList(), dest, apiKeys = ApiKeys(tmdbKey.ifBlank { null }, omdbKey.ifBlank { null }))
                 }
             }.onSuccess { result ->
                 plan = result
@@ -140,9 +163,22 @@ class AppState(
                 withContext(Dispatchers.IO) {
                     session.execute(items, dest) { p -> progress = p }
                 }
-            }.onSuccess {
-                report = it
+            }.onSuccess { result ->
+                report = result
                 undoReport = null
+                if (downloadPosters) {
+                    // Poster phase (best effort): journaled poster.jpg
+                    // files for folders whose items all finished DONE.
+                    runCatching {
+                        withContext(Dispatchers.IO) {
+                            posterPhase.downloadPosters(
+                                result.runId,
+                                items,
+                                dest.toDirRef(),
+                            )
+                        }
+                    }
+                }
                 phase = Phase.REPORT
             }.onFailure {
                 error = it.message ?: "Run failed"
@@ -172,6 +208,51 @@ class AppState(
         }
     }
 
+    fun saveTmdbKey(value: String) {
+        tmdbKey = value
+        scope.launch { withContext(Dispatchers.IO) { settingsStore.setTmdbKey(value) } }
+    }
+
+    fun saveOmdbKey(value: String) {
+        omdbKey = value
+        scope.launch { withContext(Dispatchers.IO) { settingsStore.setOmdbKey(value) } }
+    }
+
+    fun setDownloadPosters(value: Boolean) {
+        downloadPosters = value
+        scope.launch { withContext(Dispatchers.IO) { settingsStore.setDownloadPosters(value) } }
+    }
+
+    fun testTmdbKey() {
+        keyTestResult = "Testing TMDB key…"
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                metadataService.testTmdbKey(tmdbKey)
+            }
+            keyTestResult = result.fold(
+                onSuccess = { "TMDB: $it" },
+                onFailure = { "TMDB: ${it.message ?: "failed"}" },
+            )
+        }
+    }
+
+    fun testOmdbKey() {
+        keyTestResult = "Testing OMDb key…"
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                metadataService.testOmdbKey(omdbKey)
+            }
+            keyTestResult = result.fold(
+                onSuccess = { "OMDb: $it" },
+                onFailure = { "OMDb: ${it.message ?: "failed"}" },
+            )
+        }
+    }
+
+    fun showSettings() {
+        phase = Phase.SETTINGS
+    }
+
     fun showHistory() {
         phase = Phase.HISTORY
         loadHistory()
@@ -188,3 +269,7 @@ class AppState(
         if (plan != null) phase = Phase.PREVIEW
     }
 }
+
+
+private fun Path.toDirRef(): com.cinesort.core.domain.model.DirRef =
+    com.cinesort.core.domain.model.DirRef(toString(), fileName?.toString() ?: toString())

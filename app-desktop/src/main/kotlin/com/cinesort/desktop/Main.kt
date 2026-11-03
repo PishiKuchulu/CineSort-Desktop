@@ -18,6 +18,7 @@ import com.cinesort.desktop.ui.PreviewScreen
 import com.cinesort.desktop.ui.ReportScreen
 import com.cinesort.desktop.ui.RunningScreen
 import com.cinesort.desktop.ui.ScanningScreen
+import com.cinesort.desktop.ui.SettingsScreen
 import com.cinesort.desktop.ui.SetupScreen
 
 /**
@@ -43,6 +44,7 @@ fun main() = application {
                         Phase.RUNNING -> RunningScreen(state)
                         Phase.REPORT -> ReportScreen(state)
                         Phase.HISTORY -> HistoryScreen(state)
+                        Phase.SETTINGS -> SettingsScreen(state)
                     }
                 }
             }

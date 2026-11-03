@@ -31,5 +31,14 @@ class DesktopSettingsStoreTest {
 
         store.setDestination(null)
         assertNull(store.destination.first())
+
+        store.setTmdbKey("  tmdb-key  ")
+        store.setOmdbKey("omdb-key")
+        store.setDownloadPosters(true)
+        assertEquals("tmdb-key", store.tmdbKey.first())
+        assertEquals("omdb-key", store.omdbKey.first())
+        assertEquals(true, store.downloadPosters.first())
+        store.setTmdbKey(null)
+        assertNull(store.tmdbKey.first())
     }
 }

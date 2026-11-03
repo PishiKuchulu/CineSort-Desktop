@@ -18,6 +18,12 @@ import com.cinesort.core.domain.planner.PlannedItem
 import com.cinesort.core.domain.scan.ScanDisposition
 import com.cinesort.core.domain.scan.ScanRules
 import com.cinesort.core.domain.scan.ScanSettings
+import com.cinesort.core.domain.planner.ItemType
+import com.cinesort.core.parser.NormalizedKey
+import com.cinesort.core.parser.ParseResult
+import com.cinesort.desktop.data.metadata.ApiKeys
+import com.cinesort.desktop.data.metadata.DesktopMetadataService
+import com.cinesort.desktop.data.metadata.MetadataQuery
 import com.cinesort.core.parser.AnchorMediaNameParser
 import com.cinesort.core.parser.PathContext
 import com.cinesort.core.parser.TitleCaseMode
@@ -49,6 +55,7 @@ data class SessionPlan(
 class DesktopOrganizeSession(
     private val gateway: StorageGateway,
     private val journal: JournalStore,
+    private val metadataService: DesktopMetadataService? = null,
 ) {
     private val planner = OrganizePlanner()
 
@@ -59,6 +66,7 @@ class DesktopOrganizeSession(
         naming: NamingOptions = NamingOptions(),
         extraNoiseWords: Set<String> = emptySet(),
         titleCaseMode: TitleCaseMode = TitleCaseMode.SMART,
+        apiKeys: ApiKeys = ApiKeys(),
         now: Long = System.currentTimeMillis(),
     ): SessionPlan {
         val destinationRef = destination.toDirRef()
@@ -132,16 +140,30 @@ class DesktopOrganizeSession(
         }
 
         val snapshot = buildDestinationSnapshot(destinationRef)
-        val planned = planner.plan(
-            PlanInput(
-                items = found,
-                parseResults = parseResults,
-                naming = naming,
-                destination = snapshot,
-                recentlyModifiedIds = recentlyModified,
-                scanSettings = scanSettings,
-            ),
+        val planInput = PlanInput(
+            items = found,
+            parseResults = parseResults,
+            naming = naming,
+            destination = snapshot,
+            recentlyModifiedIds = recentlyModified,
+            scanSettings = scanSettings,
         )
+        var planned = planner.plan(planInput)
+        // Metadata enrichment (spec section 9): with keys and a service,
+        // look every unique title up and re-plan — the planner decorates
+        // folder names with genres/rating and attaches poster URLs.
+        val service = metadataService
+        if (service != null && (apiKeys.hasTmdb || apiKeys.hasOmdb)) {
+            val queries = buildQueries(parseResults)
+            if (queries.isNotEmpty()) {
+                val metadataByKey = runCatching {
+                    service.lookupAll(queries, apiKeys)
+                }.getOrDefault(emptyMap())
+                if (metadataByKey.isNotEmpty()) {
+                    planned = planner.plan(planInput.copy(metadataByKey = metadataByKey))
+                }
+            }
+        }
         return SessionPlan(
             items = planned,
             videosFound = found.size,
@@ -210,6 +232,37 @@ class DesktopOrganizeSession(
             volume = gateway.volumeIdOf(destination),
             freeBytes = runCatching { gateway.freeBytes(destination) }.getOrNull(),
         )
+    }
+
+    /** Unique provider lookups for the parsed items (mirrors Android). */
+    private fun buildQueries(
+        results: Map<String, ParseResult>,
+    ): List<MetadataQuery> {
+        val seen = mutableSetOf<Triple<ItemType, String, Int?>>()
+        val queries = mutableListOf<MetadataQuery>()
+        for (result in results.values) {
+            when (result) {
+                is ParseResult.Movie -> {
+                    val key = NormalizedKey.movieKey(result.title, result.year)
+                    if (seen.add(Triple(ItemType.MOVIE, key, result.year))) {
+                        queries += MetadataQuery(ItemType.MOVIE, result.title, result.year, key)
+                    }
+                }
+                is ParseResult.Episode -> {
+                    val key = NormalizedKey.seriesKey(result.seriesTitle)
+                    if (seen.add(Triple(ItemType.EPISODE, key, result.seriesYearHint))) {
+                        queries += MetadataQuery(
+                            ItemType.EPISODE,
+                            result.seriesTitle,
+                            result.seriesYearHint,
+                            key,
+                        )
+                    }
+                }
+                is ParseResult.Unrecognized -> Unit
+            }
+        }
+        return queries
     }
 
     private fun Path.toDirRef(): DirRef =
