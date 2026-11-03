@@ -2,10 +2,13 @@
 kotlin = "2.0.21"
 compose = "1.7.3"
 coroutines = "1.9.0"
-room = "2.6.1"
-# sqlite-bundled only exists from 2.5.0 (there is no 2.4.0 artifact —
-# CI run for the Room journal slice failed resolution on exactly that).
-sqlite = "2.5.0"
+# Desktop aligns its own Room/SQLite stack (the Android app pins Room
+# 2.6.1, but its sqlite-bundled driver only exists from sqlite 2.5.0,
+# and mixing 2.4/2.5 sqlite artifacts breaks variant resolution — two
+# CI rounds proved it). Room 2.7.2 + sqlite 2.5.1 is the aligned pair;
+# entity/DAO code is identical across these versions.
+room = "2.7.2"
+sqlite = "2.5.1"
 datastore = "1.1.1"
 ksp = "2.0.21-1.0.28"
 junit = "5.10.2"
