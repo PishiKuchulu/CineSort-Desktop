@@ -21,6 +21,11 @@ kotlin {
             kotlin.srcDir("src/main/kotlin")
             dependencies {
                 implementation(project(":core-data-desktop"))
+                // The UI names domain/parser types directly (PlannedItem,
+                // ParseResult, reports); core-data-desktop exposes them
+                // only as implementation deps, so the app declares its own.
+                implementation(project(":shared:core-domain"))
+                implementation(project(":shared:core-parser"))
                 implementation(compose.desktop.currentOs)
                 implementation(compose.material3)
                 implementation(libs.kotlinx.coroutines.core)
