@@ -1,0 +1,17 @@
+# Gradle / build outputs
+.gradle/
+build/
+out/
+*/build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# NOTE: PFP governance files never live in this repository
+# (private methodology — kept outside the repo by policy).
