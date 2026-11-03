@@ -27,7 +27,7 @@ jobs:
           gradle-version: "8.10.2"
 
       - name: Run unit tests
-        run: gradle :shared:core-parser:test :shared:core-domain:test :core-data-desktop:test --stacktrace
+        run: gradle :shared:core-parser:test :shared:core-domain:test :core-data-desktop:jvmTest --stacktrace
 
       - name: Upload test reports on failure
         if: failure()
