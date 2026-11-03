@@ -1,24 +1,31 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.jetbrains.compose)
     alias(libs.plugins.compose.compiler)
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
-}
-
+// This module is KMP with a single jvm() target for the same reason as
+// core-data-desktop: as a plain kotlin("jvm") consumer it re-resolved
+// Room's root module directly and found no JVM variant (CI run #3,
+// packageExe). As a KMP consumer it receives core-data-desktop's JVM
+// variant with Room/DataStore resolved through their KMP metadata.
+// The existing src/main layout is kept via the srcDir wiring below.
 kotlin {
     jvmToolchain(17)
-}
+    jvm()
 
-dependencies {
-    implementation(project(":core-data-desktop"))
-    implementation(compose.desktop.currentOs)
-    implementation(compose.material3)
+    sourceSets {
+        val jvmMain by getting {
+            kotlin.srcDir("src/main/kotlin")
+            dependencies {
+                implementation(project(":core-data-desktop"))
+                implementation(compose.desktop.currentOs)
+                implementation(compose.material3)
+            }
+        }
+    }
 }
 
 compose.desktop {
