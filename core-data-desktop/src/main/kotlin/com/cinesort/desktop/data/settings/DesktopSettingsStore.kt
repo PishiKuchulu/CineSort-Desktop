@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -52,6 +53,13 @@ class DesktopSettingsStore(
         dataStore.edit { prefs -> prefs[DOWNLOAD_POSTERS] = value }
     }
 
+    /** When the last update check COMPLETED (stamped on completion only). */
+    val lastUpdateCheckAt: Flow<Long> = dataStore.data.map { it[LAST_UPDATE_CHECK] ?: 0L }
+
+    suspend fun setLastUpdateCheckAt(epochMillis: Long) {
+        dataStore.edit { prefs -> prefs[LAST_UPDATE_CHECK] = epochMillis }
+    }
+
     suspend fun setTmdbKey(key: String?) {
         dataStore.edit { prefs ->
             if (key.isNullOrBlank()) prefs.remove(TMDB_KEY) else prefs[TMDB_KEY] = key.trim()
@@ -83,5 +91,6 @@ class DesktopSettingsStore(
         val TMDB_KEY = stringPreferencesKey("tmdb_key")
         val OMDB_KEY = stringPreferencesKey("omdb_key")
         val DOWNLOAD_POSTERS = booleanPreferencesKey("download_posters")
+        val LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_at")
     }
 }

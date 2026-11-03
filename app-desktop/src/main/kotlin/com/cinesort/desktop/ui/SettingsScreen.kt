@@ -31,6 +31,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.cinesort.desktop.state.AppState
+import java.awt.Desktop
+import java.io.File
+import java.text.DateFormat
+import java.util.Date
 
 /**
  * Settings as accordion cards — the pattern approved on Android
@@ -94,6 +98,70 @@ fun SettingsScreen(state: AppState) {
             state.keyTestResult?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(it, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        AccordionCard(
+            title = "About & updates",
+            expanded = openSection == "about",
+            onToggle = { openSection = if (openSection == "about") "" else "about" },
+        ) {
+            Text("CineSort Desktop ${state.currentVersion}")
+            if (state.lastUpdateCheckAt > 0) {
+                Text(
+                    "Last checked: ${DateFormat.getDateTimeInstance().format(Date(state.lastUpdateCheckAt))}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            when (val update = state.updateState) {
+                AppState.UpdateUiState.Idle -> {
+                    Button(onClick = state::checkForUpdates) { Text("Check for updates") }
+                }
+                AppState.UpdateUiState.Checking -> {
+                    Text("Checking…")
+                }
+                AppState.UpdateUiState.UpToDate -> {
+                    Text("You're up to date.")
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = state::checkForUpdates) { Text("Check again") }
+                }
+                is AppState.UpdateUiState.Available -> {
+                    Text(
+                        "Version ${update.info.version} is available (${update.info.assetName}).",
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { state.downloadUpdate(update.info) }) {
+                        Text("Download update")
+                    }
+                }
+                is AppState.UpdateUiState.Downloading -> {
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = { update.fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("Downloading ${update.info.assetName}…")
+                }
+                is AppState.UpdateUiState.Downloaded -> {
+                    Text("Downloaded and checksum-verified: ${update.file.name}")
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = {
+                        runCatching { Desktop.getDesktop().open(update.file.parentFile) }
+                    }) { Text("Open downloads folder") }
+                }
+                is AppState.UpdateUiState.Error -> {
+                    Text(
+                        update.message,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = state::checkForUpdates) { Text("Try again") }
+                }
             }
         }
 

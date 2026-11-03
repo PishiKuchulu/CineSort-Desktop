@@ -16,7 +16,10 @@ import com.cinesort.desktop.data.files.DesktopStorageGateway
 import com.cinesort.desktop.data.metadata.ApiKeys
 import com.cinesort.desktop.data.metadata.DesktopMetadataService
 import com.cinesort.desktop.data.session.DesktopOrganizeSession
+import com.cinesort.desktop.data.update.DesktopUpdateChecker
+import com.cinesort.desktop.data.update.DesktopUpdateInfo
 import com.cinesort.desktop.data.work.DesktopPosterPhase
+import java.io.File
 import com.cinesort.desktop.data.session.SessionPlan
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -74,6 +77,24 @@ class AppState(
     var keyTestResult by mutableStateOf<String?>(null)
         private set
 
+    /** This build's version; kept in step with the packaging version. */
+    val currentVersion: String = "1.0.0"
+
+    sealed interface UpdateUiState {
+        data object Idle : UpdateUiState
+        data object Checking : UpdateUiState
+        data object UpToDate : UpdateUiState
+        data class Available(val info: DesktopUpdateInfo) : UpdateUiState
+        data class Error(val message: String) : UpdateUiState
+        data class Downloading(val info: DesktopUpdateInfo, val fraction: Float) : UpdateUiState
+        data class Downloaded(val info: DesktopUpdateInfo, val file: File) : UpdateUiState
+    }
+
+    var updateState by mutableStateOf<UpdateUiState>(UpdateUiState.Idle)
+        private set
+    var lastUpdateCheckAt by mutableStateOf(0L)
+        private set
+
     val canScan: Boolean get() = sources.isNotEmpty() && destination != null
 
     init {
@@ -87,6 +108,14 @@ class AppState(
                 sources.addAll(saved.first)
                 destination = saved.second
                 runCatching {
+                    lastUpdateCheckAt = withContext(Dispatchers.IO) {
+                        settingsStore.lastUpdateCheckAt.first()
+                    }
+                    if (DesktopUpdateChecker.isAutoCheckDue(lastUpdateCheckAt, System.currentTimeMillis())) {
+                        checkForUpdates()
+                    }
+                }
+                runCatching {
                     val keys = withContext(Dispatchers.IO) {
                         settingsStore.tmdbKey.first() to settingsStore.omdbKey.first()
                     }
@@ -96,6 +125,63 @@ class AppState(
                         settingsStore.downloadPosters.first()
                     }
                 }
+            }
+        }
+    }
+
+    /** Manual or automatic update check; stamps completion time only. */
+    fun checkForUpdates() {
+        if (updateState is UpdateUiState.Checking || updateState is UpdateUiState.Downloading) return
+        updateState = UpdateUiState.Checking
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    DesktopUpdateChecker.fetchLatestNewerThan(currentVersion)
+                }
+            }.onSuccess { info ->
+                updateState = if (info == null) {
+                    UpdateUiState.UpToDate
+                } else {
+                    UpdateUiState.Available(info)
+                }
+            }.onFailure {
+                updateState = UpdateUiState.Error(it.message ?: "Update check failed")
+            }
+            // The throttle stamp is written only now that a check has
+            // completed (the Android v1.0.7 lesson: stamping first
+            // silenced launch checks for a day after any failure).
+            val now = System.currentTimeMillis()
+            lastUpdateCheckAt = now
+            withContext(Dispatchers.IO) { settingsStore.setLastUpdateCheckAt(now) }
+        }
+    }
+
+    fun downloadUpdate(info: DesktopUpdateInfo) {
+        updateState = UpdateUiState.Downloading(info, 0f)
+        scope.launch {
+            runCatching {
+                val dest = File(
+                    File(System.getProperty("user.home"), ".cinesort-desktop/updates"),
+                    info.assetName,
+                )
+                withContext(Dispatchers.IO) {
+                    DesktopUpdateChecker.download(
+                        url = info.downloadUrl,
+                        dest = dest,
+                        sha256Url = info.sha256Url,
+                    ) { downloaded, total ->
+                        if (total > 0) {
+                            updateState = UpdateUiState.Downloading(
+                                info, downloaded.toFloat() / total,
+                            )
+                        }
+                    }
+                }
+                dest
+            }.onSuccess { file ->
+                updateState = UpdateUiState.Downloaded(info, file)
+            }.onFailure {
+                updateState = UpdateUiState.Error(it.message ?: "Download failed")
             }
         }
     }
