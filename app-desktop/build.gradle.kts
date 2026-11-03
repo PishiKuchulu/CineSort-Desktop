@@ -23,6 +23,7 @@ kotlin {
                 implementation(project(":core-data-desktop"))
                 implementation(compose.desktop.currentOs)
                 implementation(compose.material3)
+                implementation(libs.kotlinx.coroutines.core)
             }
         }
     }
