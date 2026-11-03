@@ -103,7 +103,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version-gate.outputs.version }}
         run: |
-          gh release create "v${VERSION}" release-assets/* \
-            --repo "${{ github.repository }}" \
-            --title "CineSort Desktop v${VERSION}" \
-            --notes "CineSort Desktop v${VERSION} — Windows (.exe/.msi), Linux (.deb) and macOS (.dmg, unsigned) packages with SHA-256 sidecars."
+          if gh release view "v${VERSION}" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+                      gh release upload "v${VERSION}" release-assets/* --repo "${{ github.repository }}" --clobber
+                                else
+                                  gh release create "v${VERSION}" release-assets/* \
+              --repo "${{ github.repository }}" \
+              --title "CineSort Desktop v${VERSION}" \
+              --notes "CineSort Desktop v${VERSION} — Windows (.exe/.msi), Linux (.deb) and macOS (.dmg, unsigned) packages with SHA-256 sidecars."
+          fi
+          
