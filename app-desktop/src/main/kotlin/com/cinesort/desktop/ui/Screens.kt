@@ -1,5 +1,6 @@
 package com.cinesort.desktop.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -71,7 +72,7 @@ fun PlannedItem.displayTitle(): String = when (val r = effective) {
     else -> scanned.file.name
 }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun SetupScreen(state: AppState) {
     // Drag & drop (F-15): folders dropped anywhere on this screen are
