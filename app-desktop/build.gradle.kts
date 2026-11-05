@@ -48,7 +48,7 @@ compose.desktop {
             // macOS DMG validation requires MAJOR > 0, so the desktop
             // line starts at 1.0.0 (a 0.x packageVersion fails the
             // whole build at configuration time — CI run #1).
-            packageVersion = "1.1.0"
+            packageVersion = "1.1.1"
             description = "Organize movie and series files into a clean library"
             vendor = "PishiKuchulu"
         }

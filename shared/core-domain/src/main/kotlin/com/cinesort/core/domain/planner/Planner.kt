@@ -158,6 +158,15 @@ class OrganizePlanner {
      * before this the planner defined the field and never read it, so a
      * too-full destination only surfaced mid-run, per file, after part of
      * the library had already moved.
+     *
+     * Only CROSS-VOLUME items count: a same-volume move is a provider
+     * reparent that consumes no destination space at all, so charging
+     * those bytes made the warning claim a run would fail on exactly
+     * the full-disk, single-volume libraries that move for free (owner
+     * report 2026-11-05). Same-volume items that still take the copy
+     * path (renamed target, move-less provider) need only one file's
+     * transient space, which the gateway pre-checks per file at
+     * execution time.
      */
     fun freeSpaceShortfall(
         planned: List<PlannedItem>,
@@ -165,7 +174,7 @@ class OrganizePlanner {
     ): Long? {
         val free = destination.freeBytes ?: return null
         val needed = planned
-            .filter { it.selected && it.status == PlannedStatus.READY }
+            .filter { it.selected && it.status == PlannedStatus.READY && it.crossVolume }
             .sumOf { it.sizeBytes }
         return if (needed > free) needed - free else null
     }

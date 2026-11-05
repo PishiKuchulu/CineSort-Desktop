@@ -153,6 +153,7 @@ class Section2AuditFixesTest {
         size: Long,
         selected: Boolean = true,
         status: PlannedStatus = PlannedStatus.READY,
+        crossVolume: Boolean = false,
     ): PlannedItem {
         val file = FileRef(
             id = "file-$id",
@@ -177,6 +178,7 @@ class Section2AuditFixesTest {
             targetFileName = "Movie.2020.mkv",
             status = status,
             selected = selected,
+            crossVolume = crossVolume,
         )
     }
 
@@ -184,16 +186,36 @@ class Section2AuditFixesTest {
     fun `free space shortfall is the missing bytes and only for selected ready items`() {
         val planner = OrganizePlanner()
         val items = listOf(
-            plannedItem("a", size = 700),
-            plannedItem("b", size = 500),
-            plannedItem("c", size = 10_000, selected = false),
-            plannedItem("d", size = 10_000, status = PlannedStatus.NEEDS_REVIEW),
+            plannedItem("a", size = 700, crossVolume = true),
+            plannedItem("b", size = 500, crossVolume = true),
+            plannedItem("c", size = 10_000, selected = false, crossVolume = true),
+            plannedItem("d", size = 10_000, status = PlannedStatus.NEEDS_REVIEW, crossVolume = true),
         )
         assertNull(planner.freeSpaceShortfall(items, DestinationSnapshot(freeBytes = null)))
         assertNull(planner.freeSpaceShortfall(items, DestinationSnapshot(freeBytes = 1_200)))
         assertEquals(
             200L,
             planner.freeSpaceShortfall(items, DestinationSnapshot(freeBytes = 1_000)),
+        )
+    }
+
+    @Test
+    fun `same-volume items never create a free space shortfall`() {
+        // The full-disk, single-volume library: 86 GB of movies moving
+        // inside one storage consume no new destination space (provider
+        // reparents), so even a nearly-full destination reports no
+        // shortfall — the 2026-11-05 owner report.
+        val planner = OrganizePlanner()
+        val items = listOf(
+            plannedItem("a", size = 50_000_000_000, crossVolume = false),
+            plannedItem("b", size = 36_000_000_000, crossVolume = false),
+        )
+        assertNull(planner.freeSpaceShortfall(items, DestinationSnapshot(freeBytes = 1_000)))
+        // Mixed plans charge only the cross-volume bytes.
+        val mixed = items + plannedItem("c", size = 3_000, crossVolume = true)
+        assertEquals(
+            2_000L,
+            planner.freeSpaceShortfall(mixed, DestinationSnapshot(freeBytes = 1_000)),
         )
     }
 

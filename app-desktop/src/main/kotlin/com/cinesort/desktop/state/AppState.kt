@@ -99,7 +99,7 @@ class AppState(
     private var undoInFlight by mutableStateOf(false)
 
     /** This build's version; kept in step with the packaging version. */
-    val currentVersion: String = "1.1.0"
+    val currentVersion: String = "1.1.1"
 
     sealed interface UpdateUiState {
         data object Idle : UpdateUiState
