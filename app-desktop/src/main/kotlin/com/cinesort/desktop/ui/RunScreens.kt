@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -19,6 +20,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -51,6 +56,30 @@ fun RunningScreen(state: AppState) {
 @Composable
 fun ReportScreen(state: AppState) {
     val report = state.report ?: return
+    var confirmUndo by remember { mutableStateOf(false) }
+    if (confirmUndo) {
+        AlertDialog(
+            onDismissRequest = { confirmUndo = false },
+            title = { Text("Undo this run?") },
+            text = {
+                Text(
+                    "Every file this run moved will be moved back to its " +
+                        "original folder. This cannot be re-done automatically.",
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmUndo = false
+                        state.undo(report.runId)
+                    },
+                ) { Text("Undo run") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { confirmUndo = false }) { Text("Cancel") }
+            },
+        )
+    }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Done", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
@@ -90,7 +119,7 @@ fun ReportScreen(state: AppState) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = state::backToSetup) { Text("New scan") }
-            OutlinedButton(onClick = { state.undo(report.runId) }) { Text("Undo this run") }
+            OutlinedButton(onClick = { confirmUndo = true }) { Text("Undo this run") }
             OutlinedButton(onClick = state::showHistory) { Text("History") }
         }
     }
@@ -98,6 +127,30 @@ fun ReportScreen(state: AppState) {
 
 @Composable
 fun HistoryScreen(state: AppState) {
+    var pendingUndoId by remember { mutableStateOf<String?>(null) }
+    pendingUndoId?.let { runId ->
+        AlertDialog(
+            onDismissRequest = { pendingUndoId = null },
+            title = { Text("Undo this run?") },
+            text = {
+                Text(
+                    "Every file this run moved will be moved back to its " +
+                        "original folder. This cannot be re-done automatically.",
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pendingUndoId = null
+                        state.undo(runId)
+                    },
+                ) { Text("Undo run") }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { pendingUndoId = null }) { Text("Cancel") }
+            },
+        )
+    }
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Row {
             Column(Modifier.weight(1f)) {
@@ -137,7 +190,7 @@ fun HistoryScreen(state: AppState) {
                             )
                         }
                         if (!run.undone && run.finishedAt != null) {
-                            OutlinedButton(onClick = { state.undo(run.id) }) { Text("Undo") }
+                            OutlinedButton(onClick = { pendingUndoId = run.id }) { Text("Undo") }
                         }
                     }
                 }

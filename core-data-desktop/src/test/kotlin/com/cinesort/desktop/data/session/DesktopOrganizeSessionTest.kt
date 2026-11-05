@@ -72,6 +72,49 @@ class DesktopOrganizeSessionTest {
     }
 
     @Test
+    fun replanAppliesManualOverrideWithoutRescan() = runBlocking {
+        val source = tempDir.resolve("downloads")
+        val library = tempDir.resolve("library")
+        Files.createDirectories(library)
+        writeAged(source, "Inception.2010.1080p.BluRay.mkv", 2048)
+
+        val session = DesktopOrganizeSession(
+            DesktopStorageGateway(),
+            InMemoryJournalStore(),
+        )
+        val plan = session.scanAndPlan(
+            sources = listOf(source),
+            destination = library,
+            now = 2_000_000L,
+        )
+        val item = plan.items.single()
+        val original = item.effective as com.cinesort.core.parser.ParseResult.Movie
+        assertEquals("Inception", original.title)
+        assertTrue(plan.destinationFreeBytes != null)
+
+        // The user corrects the title in the Inspector: the re-plan
+        // must target the corrected folder without a new scan.
+        val corrected = original.copy(title = "Interstellar", year = 2014)
+        val replanned = session.replan(
+            parseOverrides = mapOf(item.id to corrected),
+        )
+        assertTrue(replanned != null)
+        val updated = replanned!!.items.single()
+        assertTrue(
+            updated.targetFolderPath.contains("Interstellar (2014)"),
+            updated.targetFolderPath,
+        )
+        assertEquals(PlannedStatus.READY, updated.status)
+
+        // No scan yet -> no re-plan.
+        val fresh = DesktopOrganizeSession(
+            DesktopStorageGateway(),
+            InMemoryJournalStore(),
+        )
+        assertEquals(null, fresh.replan(emptyMap()))
+    }
+
+    @Test
     fun recentlyModifiedFilesAreNotPlannedReady() = runBlocking {
         val source = tempDir.resolve("downloads")
         val library = tempDir.resolve("library")

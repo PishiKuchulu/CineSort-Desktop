@@ -40,6 +40,8 @@ data class SessionPlan(
     val failedCount: Int,
     val issueSamples: List<String>,
     val destinationName: String,
+    /** Destination free space at plan time, for the shortfall warning. */
+    val destinationFreeBytes: Long? = null,
 )
 
 /**
@@ -58,6 +60,23 @@ class DesktopOrganizeSession(
     private val metadataService: DesktopMetadataService? = null,
 ) {
     private val planner = OrganizePlanner()
+
+    /**
+     * The last scan's working set, kept so a manual parse override can
+     * re-plan without re-reading the sources (F-07 edit flow).
+     */
+    private data class ScanContext(
+        val found: List<ScannedFile>,
+        val parseResults: Map<String, ParseResult>,
+        val recentlyModified: Set<String>,
+        val destination: Path,
+        val scannedEntries: Int,
+        val skipped: Int,
+        val failed: Int,
+        val issues: List<String>,
+    )
+
+    private var lastScan: ScanContext? = null
 
     suspend fun scanAndPlan(
         sources: List<Path>,
@@ -139,13 +158,67 @@ class DesktopOrganizeSession(
             )
         }
 
+        lastScan = ScanContext(
+            found = found,
+            parseResults = parseResults,
+            recentlyModified = recentlyModified,
+            destination = destination,
+            scannedEntries = scannedEntries,
+            skipped = skipped,
+            failed = failed,
+            issues = issues,
+        )
+        return planFromContext(
+            context = lastScan!!,
+            parseResults = parseResults,
+            scanSettings = scanSettings,
+            naming = naming,
+            apiKeys = apiKeys,
+        )
+    }
+
+    /**
+     * Re-plans the last scan with manual parse overrides applied
+     * (file id → corrected result), without touching the sources
+     * again. Returns null when no scan has happened yet.
+     */
+    suspend fun replan(
+        parseOverrides: Map<String, ParseResult>,
+        scanSettings: ScanSettings = ScanSettings(),
+        naming: NamingOptions = NamingOptions(),
+        apiKeys: ApiKeys = ApiKeys(),
+    ): SessionPlan? {
+        val context = lastScan ?: return null
+        val effective = if (parseOverrides.isEmpty()) {
+            context.parseResults
+        } else {
+            context.parseResults + parseOverrides
+        }
+        return planFromContext(
+            context = context,
+            parseResults = effective,
+            scanSettings = scanSettings,
+            naming = naming,
+            apiKeys = apiKeys,
+        )
+    }
+
+    /** Shared planning tail for [scanAndPlan] and [replan]. */
+    private suspend fun planFromContext(
+        context: ScanContext,
+        parseResults: Map<String, ParseResult>,
+        scanSettings: ScanSettings,
+        naming: NamingOptions,
+        apiKeys: ApiKeys,
+    ): SessionPlan {
+        val destinationRef = context.destination.toDirRef()
         val snapshot = buildDestinationSnapshot(destinationRef)
         val planInput = PlanInput(
-            items = found,
+            items = context.found,
             parseResults = parseResults,
             naming = naming,
             destination = snapshot,
-            recentlyModifiedIds = recentlyModified,
+            recentlyModifiedIds = context.recentlyModified,
             scanSettings = scanSettings,
         )
         var planned = planner.plan(planInput)
@@ -166,12 +239,13 @@ class DesktopOrganizeSession(
         }
         return SessionPlan(
             items = planned,
-            videosFound = found.size,
-            scannedEntries = scannedEntries,
-            skippedCount = skipped,
-            failedCount = failed,
-            issueSamples = issues,
+            videosFound = context.found.size,
+            scannedEntries = context.scannedEntries,
+            skippedCount = context.skipped,
+            failedCount = context.failed,
+            issueSamples = context.issues,
             destinationName = destinationRef.name,
+            destinationFreeBytes = snapshot.freeBytes,
         )
     }
 

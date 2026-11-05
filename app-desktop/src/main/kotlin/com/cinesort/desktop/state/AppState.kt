@@ -8,6 +8,7 @@ import com.cinesort.core.domain.execute.ExecutionProgress
 import com.cinesort.core.domain.execute.ExecutionReport
 import com.cinesort.core.domain.execute.UndoReport
 import com.cinesort.core.domain.journal.RunRecord
+import com.cinesort.core.parser.ParseResult
 import com.cinesort.desktop.data.db.RoomJournalStore
 import com.cinesort.desktop.data.settings.DesktopSettingsStore
 import kotlinx.coroutines.flow.first
@@ -74,11 +75,31 @@ class AppState(
     var omdbKey by mutableStateOf("")
     var downloadPosters by mutableStateOf(false)
         private set
-    var keyTestResult by mutableStateOf<String?>(null)
+    var tmdbTestResult by mutableStateOf<String?>(null)
+        private set
+    var omdbTestResult by mutableStateOf<String?>(null)
+        private set
+    var isTestingTmdb by mutableStateOf(false)
+        private set
+    var isTestingOmdb by mutableStateOf(false)
         private set
 
+    var scanSettings by mutableStateOf(com.cinesort.core.domain.scan.ScanSettings())
+        private set
+    var namingOptions by mutableStateOf(com.cinesort.core.domain.naming.NamingOptions())
+        private set
+
+    /** Preview search text and status filter (F-06). */
+    var previewQuery by mutableStateOf("")
+    var previewStatus by mutableStateOf<com.cinesort.core.domain.planner.PlannedStatus?>(null)
+
+    /** Manual parse corrections by planned-item id (F-07), session-scoped. */
+    val parseOverrides = androidx.compose.runtime.mutableStateMapOf<String, ParseResult>()
+
+    private var undoInFlight by mutableStateOf(false)
+
     /** This build's version; kept in step with the packaging version. */
-    val currentVersion: String = "1.0.0"
+    val currentVersion: String = "1.1.0"
 
     sealed interface UpdateUiState {
         data object Idle : UpdateUiState
@@ -101,6 +122,16 @@ class AppState(
         // Restore the library layout from the last session.
         scope.launch {
             runCatching {
+                // Upgrade any v1.0.0 plaintext keys to encrypted form
+                // before anything reads them.
+                withContext(Dispatchers.IO) { settingsStore.migrateLegacyKeys() }
+                runCatching {
+                    val restored = withContext(Dispatchers.IO) {
+                        settingsStore.scanSettings.first() to settingsStore.namingOptions.first()
+                    }
+                    scanSettings = restored.first
+                    namingOptions = restored.second
+                }
                 val saved = withContext(Dispatchers.IO) {
                     settingsStore.sources.first() to settingsStore.destination.first()
                 }
@@ -216,10 +247,19 @@ class AppState(
         val dest = destination ?: return
         phase = Phase.SCANNING
         error = null
+        parseOverrides.clear()
+        previewQuery = ""
+        previewStatus = null
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    session.scanAndPlan(sources.toList(), dest, apiKeys = ApiKeys(tmdbKey.ifBlank { null }, omdbKey.ifBlank { null }))
+                    session.scanAndPlan(
+                        sources.toList(),
+                        dest,
+                        scanSettings = scanSettings,
+                        naming = namingOptions,
+                        apiKeys = ApiKeys(tmdbKey.ifBlank { null }, omdbKey.ifBlank { null }),
+                    )
                 }
             }.onSuccess { result ->
                 plan = result
@@ -274,16 +314,71 @@ class AppState(
     }
 
     fun undo(runId: String) {
+        if (undoInFlight) return
+        undoInFlight = true
         scope.launch {
-            runCatching {
-                withContext(Dispatchers.IO) { session.undo(runId) }
-            }.onSuccess {
-                undoReport = it
-                loadHistory()
-            }.onFailure {
-                error = it.message ?: "Undo failed"
+            try {
+                runCatching {
+                    withContext(Dispatchers.IO) { session.undo(runId) }
+                }.onSuccess {
+                    undoReport = it
+                    loadHistory()
+                }.onFailure {
+                    error = it.message ?: "Undo failed"
+                }
+            } finally {
+                undoInFlight = false
             }
         }
+    }
+
+    /**
+     * Bytes by which the currently selected READY items exceed the
+     * destination's free space (the domain's own check, finally wired
+     * to the UI), or null when space suffices or is unknown.
+     */
+    fun freeSpaceShortfall(): Long? {
+        val current = plan ?: return null
+        val free = current.destinationFreeBytes ?: return null
+        val items = current.items.map { it.copy(selected = it.id !in deselected) }
+        return com.cinesort.core.domain.planner.OrganizePlanner().freeSpaceShortfall(
+            items,
+            com.cinesort.core.domain.planner.DestinationSnapshot(freeBytes = free),
+        )
+    }
+
+    /**
+     * Applies a manual parse correction from the Inspector and
+     * re-plans in place (F-07). Overrides live for this scan only.
+     */
+    fun applyOverride(itemId: String, corrected: ParseResult) {
+        parseOverrides[itemId] = corrected
+        scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    session.replan(
+                        parseOverrides = parseOverrides.toMap(),
+                        scanSettings = scanSettings,
+                        naming = namingOptions,
+                        apiKeys = ApiKeys(tmdbKey.ifBlank { null }, omdbKey.ifBlank { null }),
+                    )
+                }
+            }.onSuccess { result ->
+                if (result != null) plan = result
+            }.onFailure {
+                error = it.message ?: "Re-plan failed"
+            }
+        }
+    }
+
+    fun updateScanSettings(settings: com.cinesort.core.domain.scan.ScanSettings) {
+        scanSettings = settings
+        scope.launch { withContext(Dispatchers.IO) { settingsStore.setScanSettings(settings) } }
+    }
+
+    fun updateNamingOptions(options: com.cinesort.core.domain.naming.NamingOptions) {
+        namingOptions = options
+        scope.launch { withContext(Dispatchers.IO) { settingsStore.setNamingOptions(options) } }
     }
 
     fun loadHistory() {
@@ -310,28 +405,40 @@ class AppState(
     }
 
     fun testTmdbKey() {
-        keyTestResult = "Testing TMDB key…"
+        if (isTestingTmdb) return
+        isTestingTmdb = true
+        tmdbTestResult = null
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                metadataService.testTmdbKey(tmdbKey)
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    metadataService.testTmdbKey(tmdbKey)
+                }
+                tmdbTestResult = result.fold(
+                    onSuccess = { it },
+                    onFailure = { it.message ?: "Test failed" },
+                )
+            } finally {
+                isTestingTmdb = false
             }
-            keyTestResult = result.fold(
-                onSuccess = { "TMDB: $it" },
-                onFailure = { "TMDB: ${it.message ?: "failed"}" },
-            )
         }
     }
 
     fun testOmdbKey() {
-        keyTestResult = "Testing OMDb key…"
+        if (isTestingOmdb) return
+        isTestingOmdb = true
+        omdbTestResult = null
         scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                metadataService.testOmdbKey(omdbKey)
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    metadataService.testOmdbKey(omdbKey)
+                }
+                omdbTestResult = result.fold(
+                    onSuccess = { it },
+                    onFailure = { it.message ?: "Test failed" },
+                )
+            } finally {
+                isTestingOmdb = false
             }
-            keyTestResult = result.fold(
-                onSuccess = { "OMDb: $it" },
-                onFailure = { "OMDb: ${it.message ?: "failed"}" },
-            )
         }
     }
 
