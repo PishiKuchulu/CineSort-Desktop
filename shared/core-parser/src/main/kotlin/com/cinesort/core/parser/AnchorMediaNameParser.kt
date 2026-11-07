@@ -16,8 +16,11 @@ class AnchorMediaNameParser(
     private val extraNoiseWords: Set<String> = emptySet(),
     private val titleCaseMode: TitleCaseMode = TitleCaseMode.SMART,
 ) : MediaNameParser {
-
-    private data class Token(val text: String, val start: Int, val end: Int)
+    private data class Token(
+        val text: String,
+        val start: Int,
+        val end: Int,
+    )
 
     private data class EpisodeHit(
         val startToken: Int,
@@ -26,14 +29,17 @@ class AnchorMediaNameParser(
         val episodes: List<Int>,
     )
 
-    private data class Cleaned(val working: String, val tokens: List<Token>)
+    private data class Cleaned(
+        val working: String,
+        val tokens: List<Token>,
+    )
 
     @Suppress("TooGenericExceptionCaught")
     override fun parse(
         fileName: String,
         context: PathContext,
-    ): ParseResult {
-        return try {
+    ): ParseResult =
+        try {
             parseInternal(fileName, context)
         } catch (e: Exception) {
             // The parser must never throw (spec section 15, property tests).
@@ -43,7 +49,6 @@ class AnchorMediaNameParser(
                 trace = ParseTrace(null, null, AnchorKind.NONE, listOf("error:caught")),
             )
         }
-    }
 
     private fun parseInternal(
         fileName: String,
@@ -89,12 +94,13 @@ class AnchorMediaNameParser(
                 episodes = hit.episodes,
                 fromFolderContext = false,
                 confidence = Confidence.HIGH,
-                trace = ParseTrace(
-                    titleRange = rangeOf(titleTokens),
-                    anchorRange = rangeOf(tokens.subList(hit.startToken, hit.endToken + 1)),
-                    anchorKind = AnchorKind.EPISODE_MARKER,
-                    rules = listOf("episode:marker-in-name"),
-                ),
+                trace =
+                    ParseTrace(
+                        titleRange = rangeOf(titleTokens),
+                        anchorRange = rangeOf(tokens.subList(hit.startToken, hit.endToken + 1)),
+                        anchorKind = AnchorKind.EPISODE_MARKER,
+                        rules = listOf("episode:marker-in-name"),
+                    ),
             )
         } else {
             // Marker present but no title in the name: context must supply the title.
@@ -127,15 +133,17 @@ class AnchorMediaNameParser(
     // the episode patterns allow one optional separator (spec 6.3-B, review M14).
     // A trailing "-NN" after the episode number is a range end without the second
     // "E" (S01E01-02 = episodes 1..2, review M-H residual).
-    private val combinedEpisodeRegex = Regex(
-        """^S(\d{1,2})[._-]?E(\d{1,3})((?:[._-]?E\d{1,3})*)(?:-(\d{1,3}))?$""",
-        RegexOption.IGNORE_CASE,
-    )
+    private val combinedEpisodeRegex =
+        Regex(
+            """^S(\d{1,2})[._-]?E(\d{1,3})((?:[._-]?E\d{1,3})*)(?:-(\d{1,3}))?$""",
+            RegexOption.IGNORE_CASE,
+        )
     private val seasonOnlyTokenRegex = Regex("""^S(\d{1,2})$""", RegexOption.IGNORE_CASE)
-    private val episodeOnlyTokenRegex = Regex(
-        """^E(\d{1,3})((?:[._-]?E\d{1,3})*)(?:-(\d{1,3}))?$""",
-        RegexOption.IGNORE_CASE,
-    )
+    private val episodeOnlyTokenRegex =
+        Regex(
+            """^E(\d{1,3})((?:[._-]?E\d{1,3})*)(?:-(\d{1,3}))?$""",
+            RegexOption.IGNORE_CASE,
+        )
     private val xEpisodeRegex = Regex("""^(\d{1,2})x(\d{2,3})$""", RegexOption.IGNORE_CASE)
     private val extraEpisodeRegex = Regex("""^E(\d{1,3})$""", RegexOption.IGNORE_CASE)
     private val plainNumberRegex = Regex("""^\d{1,3}$""")
@@ -152,7 +160,10 @@ class AnchorMediaNameParser(
         return null
     }
 
-    private fun episodeHitAt(tokens: List<Token>, i: Int): EpisodeHit? =
+    private fun episodeHitAt(
+        tokens: List<Token>,
+        i: Int,
+    ): EpisodeHit? =
         combinedEpisodeHit(tokens, i)
             ?: seasonPairHit(tokens, i)
             ?: xEpisodeHit(tokens[i].text, i)
@@ -163,7 +174,10 @@ class AnchorMediaNameParser(
      * the first episode to the range end is added (missing ones filled in). An
      * implausible span or a non-increasing end leaves the list untouched.
      */
-    private fun expandEpisodeRange(episodes: MutableList<Int>, rangeEndText: String) {
+    private fun expandEpisodeRange(
+        episodes: MutableList<Int>,
+        rangeEndText: String,
+    ) {
         val rangeEnd = rangeEndText.toIntOrNull() ?: return
         val first = episodes.firstOrNull() ?: return
         if (rangeEnd <= first || rangeEnd - first > MAX_EPISODE_RANGE_SPAN) return
@@ -173,11 +187,17 @@ class AnchorMediaNameParser(
         episodes.sort()
     }
 
-    private fun combinedEpisodeHit(tokens: List<Token>, i: Int): EpisodeHit? {
+    private fun combinedEpisodeHit(
+        tokens: List<Token>,
+        i: Int,
+    ): EpisodeHit? {
         val m = combinedEpisodeRegex.matchEntire(tokens[i].text) ?: return null
         val episodes = mutableListOf(m.groupValues[2].toInt())
-        episodes += extraEpisodeNumberRegex
-            .findAll(m.groupValues[3]).map { it.groupValues[1].toInt() }.toList()
+        episodes +=
+            extraEpisodeNumberRegex
+                .findAll(m.groupValues[3])
+                .map { it.groupValues[1].toInt() }
+                .toList()
         expandEpisodeRange(episodes, m.groupValues[4])
         var end = i
         // Consume following pure E## tokens (S01E01 E02 style).
@@ -189,30 +209,44 @@ class AnchorMediaNameParser(
         return EpisodeHit(i, end, m.groupValues[1].toInt(), episodes)
     }
 
-    private fun seasonPairHit(tokens: List<Token>, i: Int): EpisodeHit? {
+    private fun seasonPairHit(
+        tokens: List<Token>,
+        i: Int,
+    ): EpisodeHit? {
         val m = seasonOnlyTokenRegex.matchEntire(tokens[i].text) ?: return null
         val next = tokens.getOrNull(i + 1) ?: return null
         val e = episodeOnlyTokenRegex.matchEntire(next.text) ?: return null
         val episodes = mutableListOf(e.groupValues[1].toInt())
-        episodes += extraEpisodeNumberRegex
-            .findAll(e.groupValues[2]).map { it.groupValues[1].toInt() }.toList()
+        episodes +=
+            extraEpisodeNumberRegex
+                .findAll(e.groupValues[2])
+                .map { it.groupValues[1].toInt() }
+                .toList()
         expandEpisodeRange(episodes, e.groupValues[3])
         return EpisodeHit(i, i + 1, m.groupValues[1].toInt(), episodes)
     }
 
-    private fun xEpisodeHit(text: String, i: Int): EpisodeHit? {
+    private fun xEpisodeHit(
+        text: String,
+        i: Int,
+    ): EpisodeHit? {
         val m = xEpisodeRegex.matchEntire(text) ?: return null
         // The anchored 1-2 digit season group can never match 1920x1080.
         return EpisodeHit(i, i, m.groupValues[1].toInt(), listOf(m.groupValues[2].toInt()))
     }
 
-    private fun seasonWordsHit(tokens: List<Token>, i: Int): EpisodeHit? {
+    private fun seasonWordsHit(
+        tokens: List<Token>,
+        i: Int,
+    ): EpisodeHit? {
         if (!tokens[i].text.equals("Season", ignoreCase = true)) return null
         val rest = tokens.subList(i + 1, minOf(i + 4, tokens.size))
         if (rest.size < 3) return null
         val (seasonTok, labelTok, epTok) = rest
-        val shapeOk = plainNumberRegex.matches(seasonTok.text) &&
-            isEpisodeLabel(labelTok.text) && plainNumberRegex.matches(epTok.text)
+        val shapeOk =
+            plainNumberRegex.matches(seasonTok.text) &&
+                isEpisodeLabel(labelTok.text) &&
+                plainNumberRegex.matches(epTok.text)
         return if (shapeOk) {
             EpisodeHit(i, i + 3, seasonTok.text.toInt(), listOf(epTok.text.toInt()))
         } else {
@@ -220,21 +254,26 @@ class AnchorMediaNameParser(
         }
     }
 
-    private fun isEpisodeLabel(text: String): Boolean =
-        text.equals("Episode", true) || text.equals("Ep", true) || text.equals("E", true)
+    private fun isEpisodeLabel(text: String): Boolean = text.equals("Episode", true) || text.equals("Ep", true) || text.equals("E", true)
 
     private fun hasSeasonOnlyMarker(tokens: List<Token>): Boolean =
         tokens.indices.any { i -> seasonOnlyAt(tokens, i) || seasonWordOnlyAt(tokens, i) }
 
     /** A bare S## token whose next token is not an episode token. */
-    private fun seasonOnlyAt(tokens: List<Token>, i: Int): Boolean {
+    private fun seasonOnlyAt(
+        tokens: List<Token>,
+        i: Int,
+    ): Boolean {
         if (!seasonOnlyTokenRegex.matches(tokens[i].text)) return false
         val next = tokens.getOrNull(i + 1)
         return next == null || !episodeOnlyTokenRegex.matches(next.text)
     }
 
     /** A "Season N" word pair not followed by an episode label. */
-    private fun seasonWordOnlyAt(tokens: List<Token>, i: Int): Boolean {
+    private fun seasonWordOnlyAt(
+        tokens: List<Token>,
+        i: Int,
+    ): Boolean {
         if (!tokens[i].text.matches(seasonWordRegex)) return false
         val next = tokens.getOrNull(i + 1)
         if (next == null || !plainNumberRegex.matches(next.text)) return false
@@ -293,14 +332,15 @@ class AnchorMediaNameParser(
         tokens: List<Token>,
     ): ParseResult.Movie? {
         val noiseStart = yearSearchBound(tokens)
-        val candidates = tokens.indices.filter { idx ->
-            val year = yearValue(tokens[idx].text) ?: return@filter false
-            if (idx >= noiseStart) return@filter false
-            // The year may not be the first token (spec 6.3 C1). A single title word
-            // that happens to be release vocabulary ("Cam", "Web") still counts as a
-            // preceding title token (review H5).
-            idx > 0
-        }
+        val candidates =
+            tokens.indices.filter { idx ->
+                val year = yearValue(tokens[idx].text) ?: return@filter false
+                if (idx >= noiseStart) return@filter false
+                // The year may not be the first token (spec 6.3 C1). A single title word
+                // that happens to be release vocabulary ("Cam", "Web") still counts as a
+                // preceding title token (review H5).
+                idx > 0
+            }
         val yearIdx = candidates.lastOrNull() ?: return null
         val title = joinTokens(tokens.subList(0, yearIdx)) ?: return null
         return ParseResult.Movie(
@@ -308,12 +348,13 @@ class AnchorMediaNameParser(
             title = applyCasing(title),
             year = yearValue(tokens[yearIdx].text),
             confidence = Confidence.HIGH,
-            trace = ParseTrace(
-                titleRange = rangeOf(tokens.subList(0, yearIdx)),
-                anchorRange = rangeOf(listOf(tokens[yearIdx])),
-                anchorKind = AnchorKind.YEAR,
-                rules = listOf("movie:last-year-before-noise"),
-            ),
+            trace =
+                ParseTrace(
+                    titleRange = rangeOf(tokens.subList(0, yearIdx)),
+                    anchorRange = rangeOf(listOf(tokens[yearIdx])),
+                    anchorKind = AnchorKind.YEAR,
+                    rules = listOf("movie:last-year-before-noise"),
+                ),
         )
     }
 
@@ -330,12 +371,13 @@ class AnchorMediaNameParser(
             title = applyCasing(title),
             year = null,
             confidence = Confidence.MEDIUM,
-            trace = ParseTrace(
-                titleRange = rangeOf(tokens.subList(0, resIdx)),
-                anchorRange = rangeOf(listOf(tokens[resIdx])),
-                anchorKind = AnchorKind.RESOLUTION_FALLBACK,
-                rules = listOf("movie:resolution-fallback"),
-            ),
+            trace =
+                ParseTrace(
+                    titleRange = rangeOf(tokens.subList(0, resIdx)),
+                    anchorRange = rangeOf(listOf(tokens[resIdx])),
+                    anchorKind = AnchorKind.RESOLUTION_FALLBACK,
+                    rules = listOf("movie:resolution-fallback"),
+                ),
         )
     }
 
@@ -364,24 +406,27 @@ class AnchorMediaNameParser(
             title = applyCasing(title),
             year = null,
             confidence = Confidence.MEDIUM,
-            trace = ParseTrace(
-                titleRange = rangeOf(tokens.subList(0, runStart)),
-                anchorRange = rangeOf(tokens.subList(runStart, runStart + 2)),
-                anchorKind = AnchorKind.NOISE_RUN_FALLBACK,
-                rules = listOf("movie:noise-run-fallback"),
-            ),
+            trace =
+                ParseTrace(
+                    titleRange = rangeOf(tokens.subList(0, runStart)),
+                    anchorRange = rangeOf(tokens.subList(runStart, runStart + 2)),
+                    anchorKind = AnchorKind.NOISE_RUN_FALLBACK,
+                    rules = listOf("movie:noise-run-fallback"),
+                ),
         )
     }
 
     // ---------------------------------------------------------------- Stage E
 
     private val bareEpisodeRegex = Regex("""^(?:E|Ep|Episode)?[ ._-]*(\d{1,3})$""", RegexOption.IGNORE_CASE)
+
     // Latin "Season 2"/"S02" plus the Persian "فصل ۲" form (review L4); the number
     // may use Persian/Arabic-Indic digits and is folded before parsing.
-    private val seasonFolderRegex = Regex(
-        """^(?:Season|S)[ ._-]?(\d{1,2})$|^فصل[ ._-]?([0-9۰-۹٠-٩]{1,2})$""",
-        RegexOption.IGNORE_CASE,
-    )
+    private val seasonFolderRegex =
+        Regex(
+            """^(?:Season|S)[ ._-]?(\d{1,2})$|^فصل[ ._-]?([0-9۰-۹٠-٩]{1,2})$""",
+            RegexOption.IGNORE_CASE,
+        )
 
     private fun bareEpisodeNumber(working: String): Int? {
         val trimmed = working.trim()
@@ -422,23 +467,30 @@ class AnchorMediaNameParser(
             episodes = episodes,
             fromFolderContext = true,
             confidence = if (usedRoot) Confidence.LOW else Confidence.MEDIUM,
-            trace = ParseTrace(
-                titleRange = null,
-                anchorRange = null,
-                anchorKind = AnchorKind.FOLDER_CONTEXT,
-                rules = listOf("episode:folder-context"),
-            ),
+            trace =
+                ParseTrace(
+                    titleRange = null,
+                    anchorRange = null,
+                    anchorKind = AnchorKind.FOLDER_CONTEXT,
+                    rules = listOf("episode:folder-context"),
+                ),
         )
     }
 
-    private data class AncestorScan(val season: Int?, val title: String?)
+    private data class AncestorScan(
+        val season: Int?,
+        val title: String?,
+    )
 
     /**
      * One ancestor folder's contribution to the context walk: a season-folder
      * match only refines the season; any other folder may supply the title
      * (which ends the walk) and, failing that, a season hint.
      */
-    private fun scanAncestorFolder(folder: String, seasonIn: Int?): AncestorScan {
+    private fun scanAncestorFolder(
+        folder: String,
+        seasonIn: Int?,
+    ): AncestorScan {
         val seasonFolder = seasonFolderRegex.matchEntire(folder.trim())
         if (seasonFolder != null) {
             return AncestorScan(seasonIn ?: seasonFromSeasonFolderMatch(seasonFolder), null)
@@ -467,7 +519,11 @@ class AnchorMediaNameParser(
         for (i in tokens.indices) {
             seasonOnlyTokenRegex.matchEntire(tokens[i].text)?.let { return it.groupValues[1].toInt() }
         }
-        return seasonInFolderRegex.find(folder)?.groupValues?.get(1)?.toIntOrNull()
+        return seasonInFolderRegex
+            .find(folder)
+            ?.groupValues
+            ?.get(1)
+            ?.toIntOrNull()
     }
 
     /** Title from a release-style folder name: text before the S##/year/resolution cut. */
@@ -489,9 +545,14 @@ class AnchorMediaNameParser(
     }
 
     /** A token that ends a folder title: episode marker, later year, or resolution. */
-    private fun isTitleCutToken(text: String, index: Int): Boolean =
-        combinedEpisodeRegex.matches(text) || seasonOnlyTokenRegex.matches(text) ||
-            (yearValue(text) != null && index > 0) || NoiseVocabulary.isResolution(text)
+    private fun isTitleCutToken(
+        text: String,
+        index: Int,
+    ): Boolean =
+        combinedEpisodeRegex.matches(text) ||
+            seasonOnlyTokenRegex.matches(text) ||
+            (yearValue(text) != null && index > 0) ||
+            NoiseVocabulary.isResolution(text)
 
     // ---------------------------------------------------------------- Stage A
 
@@ -501,10 +562,22 @@ class AnchorMediaNameParser(
     private val domainPrefixRegex = Regex("""^\s*(?:www\.)?[\w-]+\.(?:com|net|org|info|ir|xyz|cc)\b[\s._-]*""")
     private val acronymRegex = Regex("""(?:\p{L}\.){2,}""")
 
-    private val videoExtensions = setOf(
-        "mkv", "mp4", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts", "mpg",
-        "mpeg", "3gp",
-    )
+    private val videoExtensions =
+        setOf(
+            "mkv",
+            "mp4",
+            "avi",
+            "mov",
+            "wmv",
+            "flv",
+            "webm",
+            "m4v",
+            "ts",
+            "m2ts",
+            "mpg",
+            "mpeg",
+            "3gp",
+        )
 
     private fun preClean(fileName: String): Cleaned {
         var name = fileName.substringAfterLast('/').substringAfterLast('\\')
@@ -533,6 +606,7 @@ class AnchorMediaNameParser(
     private companion object {
         const val WWW_PREFIX = "www."
         const val SPACED_DASH = " - "
+
         /** Widest plausible span for an `S01E01-05`-style episode range. */
         const val MAX_EPISODE_RANGE_SPAN = 50
     }
@@ -549,7 +623,8 @@ class AnchorMediaNameParser(
     private fun stripDomainPrefix(name: String): String {
         if (name.startsWith(WWW_PREFIX, ignoreCase = true)) {
             val stripped = domainPrefixRegex.replace(name, "")
-            return if (stripped != name && stripped.isNotBlank() &&
+            return if (stripped != name &&
+                stripped.isNotBlank() &&
                 hasAnchorAfterTitleToken(stripped)
             ) {
                 stripped
@@ -585,8 +660,10 @@ class AnchorMediaNameParser(
     private fun hasAnchorAfterTitleToken(s: String): Boolean {
         val tokens = tokenize(s)
         val episodeIdx = findEpisodeMarker(tokens)?.startToken
-        val yearIdx = tokens.indexOfFirst { yearValue(it.text) != null }
-            .takeIf { it >= 0 }
+        val yearIdx =
+            tokens
+                .indexOfFirst { yearValue(it.text) != null }
+                .takeIf { it >= 0 }
         val anchorIdx = listOfNotNull(episodeIdx, yearIdx).minOrNull() ?: return false
         return anchorIdx >= 1
     }
@@ -600,8 +677,11 @@ class AnchorMediaNameParser(
         // Protect dotted acronyms: inner dots are not separators. The acronym match's
         // final dot IS a separator (S.W.A.T.2017 -> "S.W.A.T" + "2017"), so the
         // protected span excludes it.
-        val protectedSpans = acronymRegex.findAll(s)
-            .map { IntRange(it.range.first, it.range.last - 1) }.toList()
+        val protectedSpans =
+            acronymRegex
+                .findAll(s)
+                .map { IntRange(it.range.first, it.range.last - 1) }
+                .toList()
         val replaced = s.replace(" - ", " . ")
         val tokens = mutableListOf<Token>()
         var i = 0
@@ -626,10 +706,23 @@ class AnchorMediaNameParser(
     }
 
     /** Separators are whitespace/dot/underscore/bracket chars outside acronym spans. */
-    private fun isSeparatorAt(s: String, pos: Int, protectedSpans: List<IntRange>): Boolean {
+    private fun isSeparatorAt(
+        s: String,
+        pos: Int,
+        protectedSpans: List<IntRange>,
+    ): Boolean {
         val c = s[pos]
-        val separatorChar = c == ' ' || c == '\t' || c == '.' || c == '_' ||
-            c == '[' || c == ']' || c == '(' || c == ')' || c == '{' || c == '}'
+        val separatorChar =
+            c == ' ' ||
+                c == '\t' ||
+                c == '.' ||
+                c == '_' ||
+                c == '[' ||
+                c == ']' ||
+                c == '(' ||
+                c == ')' ||
+                c == '{' ||
+                c == '}'
         return separatorChar && protectedSpans.none { pos in it }
     }
 
@@ -643,9 +736,11 @@ class AnchorMediaNameParser(
 
     private fun joinTokens(tokens: List<Token>): String? {
         if (tokens.isEmpty()) return null
-        val joined = tokens.joinToString(" ") { it.text }
-            .replace(whitespaceRegex, " ")
-            .trim(' ', '-', '–', '_', '.')
+        val joined =
+            tokens
+                .joinToString(" ") { it.text }
+                .replace(whitespaceRegex, " ")
+                .trim(' ', '-', '–', '_', '.')
         return joined.ifEmpty { null }
     }
 
@@ -659,9 +754,10 @@ class AnchorMediaNameParser(
     private fun unrecognized(
         fileName: String,
         reason: String,
-    ): ParseResult.Unrecognized = ParseResult.Unrecognized(
-        fileName = fileName,
-        reason = reason,
-        trace = ParseTrace(null, null, AnchorKind.NONE, listOf("unrecognized:$reason")),
-    )
+    ): ParseResult.Unrecognized =
+        ParseResult.Unrecognized(
+            fileName = fileName,
+            reason = reason,
+            trace = ParseTrace(null, null, AnchorKind.NONE, listOf("unrecognized:$reason")),
+        )
 }

@@ -6,10 +6,13 @@ import org.junit.jupiter.api.Test
 
 /** Regression tests for external review #4 parser findings (H5, H6, M14). */
 class ParserReviewRegressionTest {
-
     private val parser = AnchorMediaNameParser(currentYear = 2026)
 
-    private fun assertMovie(fileName: String, title: String, year: Int?) {
+    private fun assertMovie(
+        fileName: String,
+        title: String,
+        year: Int?,
+    ) {
         val result = parser.parse(fileName)
         assertTrue(result is ParseResult.Movie, "expected Movie for $fileName but was $result")
         result as ParseResult.Movie
@@ -17,7 +20,12 @@ class ParserReviewRegressionTest {
         assertEquals(year, result.year, "year for $fileName")
     }
 
-    private fun assertEpisode(fileName: String, seriesTitle: String, season: Int, episodes: List<Int>) {
+    private fun assertEpisode(
+        fileName: String,
+        seriesTitle: String,
+        season: Int,
+        episodes: List<Int>,
+    ) {
         val result = parser.parse(fileName)
         assertTrue(result is ParseResult.Episode, "expected Episode for $fileName but was $result")
         result as ParseResult.Episode

@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test
  * interrupted-run close.
  */
 class Section2AuditFixesTest {
-
     private var opSeq = 0
 
     private fun op(
@@ -39,32 +38,34 @@ class Section2AuditFixesTest {
         state: OperationState,
         isCompanion: Boolean = false,
         isPoster: Boolean = false,
-    ): OperationRecord = OperationRecord(
-        id = "op-${opSeq++}",
-        runId = "run-1",
-        itemId = itemId,
-        sourceParentId = "parent",
-        sourceParentName = "Downloads",
-        fileName = "file-$itemId.mkv",
-        finalName = "file-$itemId.mkv",
-        destinationParentId = "dest",
-        destinationSegments = listOf("Movie", "Movie (2020)"),
-        state = state,
-        isCompanion = isCompanion,
-        isPoster = isPoster,
-    )
+    ): OperationRecord =
+        OperationRecord(
+            id = "op-${opSeq++}",
+            runId = "run-1",
+            itemId = itemId,
+            sourceParentId = "parent",
+            sourceParentName = "Downloads",
+            fileName = "file-$itemId.mkv",
+            finalName = "file-$itemId.mkv",
+            destinationParentId = "dest",
+            destinationSegments = listOf("Movie", "Movie (2020)"),
+            state = state,
+            isCompanion = isCompanion,
+            isPoster = isPoster,
+        )
 
     // ------------------------------------------------------------ counting
 
     @Test
     fun `poster operations never inflate the done count`() {
-        val ops = listOf(
-            op("a", OperationState.DONE),
-            op("a", OperationState.DONE, isCompanion = true),
-            op("a", OperationState.DONE, isPoster = true),
-            op("b", OperationState.DONE),
-            op("b", OperationState.DONE, isPoster = true),
-        )
+        val ops =
+            listOf(
+                op("a", OperationState.DONE),
+                op("a", OperationState.DONE, isCompanion = true),
+                op("a", OperationState.DONE, isPoster = true),
+                op("b", OperationState.DONE),
+                op("b", OperationState.DONE, isPoster = true),
+            )
         val counts = countRunOperations(ops, runFinished = true)
         assertEquals(2, counts.done)
         assertEquals(2, counts.posters)
@@ -73,10 +74,11 @@ class Section2AuditFixesTest {
 
     @Test
     fun `a stale failed row beside the done row of a resumed item counts once as done`() {
-        val ops = listOf(
-            op("a", OperationState.FAILED),
-            op("a", OperationState.DONE),
-        )
+        val ops =
+            listOf(
+                op("a", OperationState.FAILED),
+                op("a", OperationState.DONE),
+            )
         val counts = countRunOperations(ops, runFinished = true)
         assertEquals(1, counts.done)
         assertEquals(0, counts.failed)
@@ -85,11 +87,12 @@ class Section2AuditFixesTest {
 
     @Test
     fun `undone items form their own bucket and are never failed`() {
-        val ops = listOf(
-            op("a", OperationState.UNDONE),
-            op("a", OperationState.UNDONE, isCompanion = true),
-            op("b", OperationState.DONE),
-        )
+        val ops =
+            listOf(
+                op("a", OperationState.UNDONE),
+                op("a", OperationState.UNDONE, isCompanion = true),
+                op("b", OperationState.DONE),
+            )
         val counts = countRunOperations(ops, runFinished = true)
         assertEquals(1, counts.undone)
         assertEquals(1, counts.done)
@@ -98,10 +101,11 @@ class Section2AuditFixesTest {
 
     @Test
     fun `skipped items count as skipped`() {
-        val counts = countRunOperations(
-            listOf(op("a", OperationState.SKIPPED)),
-            runFinished = true,
-        )
+        val counts =
+            countRunOperations(
+                listOf(op("a", OperationState.SKIPPED)),
+                runFinished = true,
+            )
         assertEquals(1, counts.skipped)
         assertEquals(0, counts.failed)
     }
@@ -121,17 +125,18 @@ class Section2AuditFixesTest {
 
     @Test
     fun `retry excludes undone items but keeps failed and unfinished ones`() {
-        val ops = listOf(
-            op("undone", OperationState.UNDONE),
-            op("failed", OperationState.FAILED),
-            op("stuck", OperationState.COPYING),
-            op("done", OperationState.DONE),
-            op("skipped", OperationState.SKIPPED),
-            // A partially undone item (video restored, companion left DONE)
-            // is excluded too: its main operation is UNDONE.
-            op("partial", OperationState.UNDONE),
-            op("partial", OperationState.DONE, isCompanion = true),
-        )
+        val ops =
+            listOf(
+                op("undone", OperationState.UNDONE),
+                op("failed", OperationState.FAILED),
+                op("stuck", OperationState.COPYING),
+                op("done", OperationState.DONE),
+                op("skipped", OperationState.SKIPPED),
+                // A partially undone item (video restored, companion left DONE)
+                // is excluded too: its main operation is UNDONE.
+                op("partial", OperationState.UNDONE),
+                op("partial", OperationState.DONE, isCompanion = true),
+            )
         assertEquals(setOf("failed", "stuck"), retryableItemIds(ops))
     }
 
@@ -155,22 +160,24 @@ class Section2AuditFixesTest {
         status: PlannedStatus = PlannedStatus.READY,
         crossVolume: Boolean = false,
     ): PlannedItem {
-        val file = FileRef(
-            id = "file-$id",
-            name = "Movie.2020.mkv",
-            size = size,
-            lastModified = 0,
-            parentId = "parent",
-        )
+        val file =
+            FileRef(
+                id = "file-$id",
+                name = "Movie.2020.mkv",
+                size = size,
+                lastModified = 0,
+                parentId = "parent",
+            )
         return PlannedItem(
             id = id,
-            scanned = ScannedFile(
-                file = file,
-                parentDir = DirRef("parent", "Downloads"),
-                ancestors = emptyList(),
-                siblings = emptyList(),
-                sourceVolume = "primary",
-            ),
+            scanned =
+                ScannedFile(
+                    file = file,
+                    parentDir = DirRef("parent", "Downloads"),
+                    ancestors = emptyList(),
+                    siblings = emptyList(),
+                    sourceVolume = "primary",
+                ),
             companions = emptyList(),
             effective = null,
             type = ItemType.MOVIE,
@@ -185,12 +192,13 @@ class Section2AuditFixesTest {
     @Test
     fun `free space shortfall is the missing bytes and only for selected ready items`() {
         val planner = OrganizePlanner()
-        val items = listOf(
-            plannedItem("a", size = 700, crossVolume = true),
-            plannedItem("b", size = 500, crossVolume = true),
-            plannedItem("c", size = 10_000, selected = false, crossVolume = true),
-            plannedItem("d", size = 10_000, status = PlannedStatus.NEEDS_REVIEW, crossVolume = true),
-        )
+        val items =
+            listOf(
+                plannedItem("a", size = 700, crossVolume = true),
+                plannedItem("b", size = 500, crossVolume = true),
+                plannedItem("c", size = 10_000, selected = false, crossVolume = true),
+                plannedItem("d", size = 10_000, status = PlannedStatus.NEEDS_REVIEW, crossVolume = true),
+            )
         assertNull(planner.freeSpaceShortfall(items, DestinationSnapshot(freeBytes = null)))
         assertNull(planner.freeSpaceShortfall(items, DestinationSnapshot(freeBytes = 1_200)))
         assertEquals(
@@ -206,10 +214,11 @@ class Section2AuditFixesTest {
         // reparents), so even a nearly-full destination reports no
         // shortfall — the 2026-11-05 owner report.
         val planner = OrganizePlanner()
-        val items = listOf(
-            plannedItem("a", size = 50_000_000_000, crossVolume = false),
-            plannedItem("b", size = 36_000_000_000, crossVolume = false),
-        )
+        val items =
+            listOf(
+                plannedItem("a", size = 50_000_000_000, crossVolume = false),
+                plannedItem("b", size = 36_000_000_000, crossVolume = false),
+            )
         assertNull(planner.freeSpaceShortfall(items, DestinationSnapshot(freeBytes = 1_000)))
         // Mixed plans charge only the cross-volume bytes.
         val mixed = items + plannedItem("c", size = 3_000, crossVolume = true)
@@ -228,17 +237,19 @@ class Section2AuditFixesTest {
             gateway.mkdirs("primary:/Library")
             val destRoot = DirRef("primary:/Library", "Library")
             val journal = InMemoryJournalStore()
-            val skippedItem = plannedItem("skip-1", size = 123)
-                .copy(selected = false, status = PlannedStatus.SKIPPED)
+            val skippedItem =
+                plannedItem("skip-1", size = 123)
+                    .copy(selected = false, status = PlannedStatus.SKIPPED)
 
-            val report = OrganizeExecutor(gateway, journal, destRoot, clock = { 42L })
-                .execute(
-                    runId = "run-1",
-                    items = listOf(skippedItem),
-                    optionsSnapshot = "movieAddGenres: true",
-                    destinationId = "primary:/Library",
-                    destinationName = "Library",
-                )
+            val report =
+                OrganizeExecutor(gateway, journal, destRoot, clock = { 42L })
+                    .execute(
+                        runId = "run-1",
+                        items = listOf(skippedItem),
+                        optionsSnapshot = "movieAddGenres: true",
+                        destinationId = "primary:/Library",
+                        destinationName = "Library",
+                    )
 
             assertEquals(1, report.skipped)
             val ops = journal.operationsOf("run-1")
@@ -259,23 +270,24 @@ class Section2AuditFixesTest {
     // ------------------------------------------------------------ interrupted runs
 
     @Test
-    fun `closing an interrupted run fails its open operations and finishes the run`() = runTest {
-        val journal = InMemoryJournalStore()
-        journal.createRun(RunRecord(id = "run-1", startedAt = 1L, totalItems = 2))
-        journal.insertOperation(op("a", OperationState.DONE))
-        journal.insertOperation(op("b", OperationState.COPYING))
+    fun `closing an interrupted run fails its open operations and finishes the run`() =
+        runTest {
+            val journal = InMemoryJournalStore()
+            journal.createRun(RunRecord(id = "run-1", startedAt = 1L, totalItems = 2))
+            journal.insertOperation(op("a", OperationState.DONE))
+            journal.insertOperation(op("b", OperationState.COPYING))
 
-        JournalMaintenance.closeInterruptedRun(journal, "run-1", finishedAt = 99L)
+            JournalMaintenance.closeInterruptedRun(journal, "run-1", finishedAt = 99L)
 
-        val ops = journal.operationsOf("run-1")
-        assertEquals(
-            OperationState.DONE,
-            ops.first { it.itemId == "a" }.state,
-        )
-        val closed = ops.first { it.itemId == "b" }
-        assertEquals(OperationState.FAILED, closed.state)
-        assertEquals("interrupted", closed.failureReason)
-        assertEquals(99L, journal.run("run-1")!!.finishedAt)
-        assertTrue(journal.unfinishedRuns().isEmpty())
-    }
+            val ops = journal.operationsOf("run-1")
+            assertEquals(
+                OperationState.DONE,
+                ops.first { it.itemId == "a" }.state,
+            )
+            val closed = ops.first { it.itemId == "b" }
+            assertEquals(OperationState.FAILED, closed.state)
+            assertEquals("interrupted", closed.failureReason)
+            assertEquals(99L, journal.run("run-1")!!.finishedAt)
+            assertTrue(journal.unfinishedRuns().isEmpty())
+        }
 }

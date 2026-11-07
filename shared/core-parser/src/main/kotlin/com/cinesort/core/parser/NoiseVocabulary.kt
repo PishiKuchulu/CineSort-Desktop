@@ -12,32 +12,102 @@ object NoiseVocabulary {
 
     val resolutionWords = setOf("4k", "8k", "uhd")
 
-    val source = setOf(
-        "bluray", "blu-ray", "bdrip", "brrip", "bdremux", "remux", "web", "web-dl", "webdl",
-        "webrip", "web-rip", "hdtv", "pdtv", "dvdrip", "dvdscr", "scr", "screener", "hdrip",
-        "cam", "camrip", "ts", "telesync", "tc", "hdts", "vodrip", "amzn", "nf", "dsnp",
-        "hmax", "atvp",
-    )
+    val source =
+        setOf(
+            "bluray",
+            "blu-ray",
+            "bdrip",
+            "brrip",
+            "bdremux",
+            "remux",
+            "web",
+            "web-dl",
+            "webdl",
+            "webrip",
+            "web-rip",
+            "hdtv",
+            "pdtv",
+            "dvdrip",
+            "dvdscr",
+            "scr",
+            "screener",
+            "hdrip",
+            "cam",
+            "camrip",
+            "ts",
+            "telesync",
+            "tc",
+            "hdts",
+            "vodrip",
+            "amzn",
+            "nf",
+            "dsnp",
+            "hmax",
+            "atvp",
+        )
 
-    val codec = setOf(
-        "x264", "x265", "h264", "h265", "hevc", "avc", "xvid", "divx", "av1", "10bit",
-        "8bit", "hdr", "hdr10", "hdr10+", "dv",
-    )
+    val codec =
+        setOf(
+            "x264",
+            "x265",
+            "h264",
+            "h265",
+            "hevc",
+            "avc",
+            "xvid",
+            "divx",
+            "av1",
+            "10bit",
+            "8bit",
+            "hdr",
+            "hdr10",
+            "hdr10+",
+            "dv",
+        )
 
-    val audio = setOf(
-        "aac", "ac3", "eac3", "ddp", "dd5", "dts", "truehd", "atmos", "flac", "6ch", "2ch",
-        "5.1", "7.1",
-    )
+    val audio =
+        setOf(
+            "aac",
+            "ac3",
+            "eac3",
+            "ddp",
+            "dd5",
+            "dts",
+            "truehd",
+            "atmos",
+            "flac",
+            "6ch",
+            "2ch",
+            "5.1",
+            "7.1",
+        )
 
-    val language = setOf(
-        "farsi", "persian", "dubbed", "dub", "sub", "subbed", "multi", "dual", "hardsub",
-        "softsub",
-    )
+    val language =
+        setOf(
+            "farsi",
+            "persian",
+            "dubbed",
+            "dub",
+            "sub",
+            "subbed",
+            "multi",
+            "dual",
+            "hardsub",
+            "softsub",
+        )
 
-    val misc = setOf(
-        "proper", "repack", "extended", "unrated", "uncut", "remastered", "imax", "internal",
-        "limited",
-    )
+    val misc =
+        setOf(
+            "proper",
+            "repack",
+            "extended",
+            "unrated",
+            "uncut",
+            "remastered",
+            "imax",
+            "internal",
+            "limited",
+        )
 
     val all: Set<String> = source + codec + audio + language + misc + resolutionWords
 

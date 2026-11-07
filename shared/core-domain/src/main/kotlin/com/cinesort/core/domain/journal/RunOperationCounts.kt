@@ -37,9 +37,10 @@ fun countRunOperations(
     runFinished: Boolean,
 ): RunOperationCounts {
     val posters = ops.count { it.isPoster && it.state == OperationState.DONE }
-    val mainByItem = ops
-        .filter { !it.isCompanion && !it.isPoster }
-        .groupBy { it.itemId }
+    val mainByItem =
+        ops
+            .filter { !it.isCompanion && !it.isPoster }
+            .groupBy { it.itemId }
     var done = 0
     var failed = 0
     var skipped = 0
@@ -97,17 +98,17 @@ data class RunOperationSummary(
  * back to failed, and a FAILED row beside still-open rows is a failure,
  * not in-progress.
  */
-fun OperationState.outcomePriority(): Int = when (this) {
-    OperationState.DONE -> 4
-    OperationState.UNDONE -> 3
-    OperationState.SKIPPED -> 2
-    OperationState.FAILED -> 1
-    else -> 0
-}
+fun OperationState.outcomePriority(): Int =
+    when (this) {
+        OperationState.DONE -> 4
+        OperationState.UNDONE -> 3
+        OperationState.SKIPPED -> 2
+        OperationState.FAILED -> 1
+        else -> 0
+    }
 
 /** The highest-priority state among [states], or null when there are none. */
-fun bestStateOf(states: Iterable<OperationState>): OperationState? =
-    states.maxByOrNull { it.outcomePriority() }
+fun bestStateOf(states: Iterable<OperationState>): OperationState? = states.maxByOrNull { it.outcomePriority() }
 
 /**
  * The same tallies as [countRunOperations], computed from a
@@ -134,12 +135,13 @@ fun countFromItemBestStates(
                 failed++
                 failedIds += itemId
             }
-            else -> if (runFinished) {
-                failed++
-                failedIds += itemId
-            } else {
-                inProgress++
-            }
+            else ->
+                if (runFinished) {
+                    failed++
+                    failedIds += itemId
+                } else {
+                    inProgress++
+                }
         }
     }
     return RunOperationCounts(
@@ -161,13 +163,16 @@ fun countFromItemBestStates(
  * undone run yields an empty set (retry is a no-op for it).
  */
 fun retryableItemIds(ops: List<OperationRecord>): Set<String> {
-    val mainByItem = ops
-        .filter { !it.isCompanion && !it.isPoster }
-        .groupBy { it.itemId }
-    return mainByItem.filterValues { itemOps ->
-        val states = itemOps.mapTo(HashSet()) { it.state }
-        OperationState.UNDONE !in states && states.any {
-            it == OperationState.FAILED || !it.isTerminal
-        }
-    }.keys
+    val mainByItem =
+        ops
+            .filter { !it.isCompanion && !it.isPoster }
+            .groupBy { it.itemId }
+    return mainByItem
+        .filterValues { itemOps ->
+            val states = itemOps.mapTo(HashSet()) { it.state }
+            OperationState.UNDONE !in states &&
+                states.any {
+                    it == OperationState.FAILED || !it.isTerminal
+                }
+        }.keys
 }

@@ -36,9 +36,10 @@ class UndoExecutor(
         // Deepest first; the path tiebreak matters (review H1): a depth-only
         // comparator makes TreeSet treat distinct same-depth paths as duplicates
         // and silently drop all but one of them.
-        val createdDirs = sortedSetOf<String>(
-            compareByDescending<String> { it.count { c -> c == '/' } }.thenBy { it },
-        )
+        val createdDirs =
+            sortedSetOf<String>(
+                compareByDescending<String> { it.count { c -> c == '/' } }.thenBy { it },
+            )
 
         // Resolve destination dirs per operation from its segments.
         val executor = OrganizeExecutor(gateway, journal, destinationRoot)
@@ -106,11 +107,13 @@ class UndoExecutor(
     ) {
         try {
             val folder = executor.resolveDirs(op.destinationSegments, dirCache)
-            val poster = folder?.let {
-                gateway.listChildren(it)
-                    .firstOrNull { child -> !child.isDirectory && child.ref.name == op.finalName }
-                    ?.ref
-            }
+            val poster =
+                folder?.let {
+                    gateway
+                        .listChildren(it)
+                        .firstOrNull { child -> !child.isDirectory && child.ref.name == op.finalName }
+                        ?.ref
+                }
             if (poster != null) gateway.delete(poster)
             journal.updateOperation(op.copy(state = OperationState.UNDONE))
         } catch (e: CancellationException) {
@@ -132,9 +135,11 @@ class UndoExecutor(
             problems += "${op.finalName}: destination folder is gone"
             return null
         }
-        val currentFile = gateway.listChildren(currentDir)
-            .firstOrNull { !it.isDirectory && it.ref.name == op.finalName }
-            ?.ref as? FileRef
+        val currentFile =
+            gateway
+                .listChildren(currentDir)
+                .firstOrNull { !it.isDirectory && it.ref.name == op.finalName }
+                ?.ref as? FileRef
         if (currentFile == null) {
             problems += "${op.finalName}: file no longer in destination"
             return null
@@ -152,17 +157,20 @@ class UndoExecutor(
         val originalParent = DirRef(op.sourceParentId, op.sourceParentName)
         // The post-run cleanup may have removed the emptied folder (review M6);
         // spec 8.5 recreates missing parents instead of failing the undo.
-        val liveParent = if (gateway.isValid(originalParent)) {
-            originalParent
-        } else {
-            gateway.recreateDir(originalParent)
-        }
+        val liveParent =
+            if (gateway.isValid(originalParent)) {
+                originalParent
+            } else {
+                gateway.recreateDir(originalParent)
+            }
         if (liveParent == null) {
             problems += "${op.finalName}: original folder is gone"
             return false
         }
-        val nameTaken = gateway.listChildren(liveParent)
-            .any { !it.isDirectory && it.ref.name == op.fileName }
+        val nameTaken =
+            gateway
+                .listChildren(liveParent)
+                .any { !it.isDirectory && it.ref.name == op.fileName }
         if (nameTaken) {
             problems += "${op.finalName}: original name is occupied"
             return false

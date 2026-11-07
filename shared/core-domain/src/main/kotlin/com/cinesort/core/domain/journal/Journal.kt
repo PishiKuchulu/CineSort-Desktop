@@ -65,8 +65,11 @@ data class RunRecord(
 
 /** True for states an operation can never leave once reached. */
 val OperationState.isTerminal: Boolean
-    get() = this == OperationState.DONE || this == OperationState.FAILED ||
-        this == OperationState.SKIPPED || this == OperationState.UNDONE
+    get() =
+        this == OperationState.DONE ||
+            this == OperationState.FAILED ||
+            this == OperationState.SKIPPED ||
+            this == OperationState.UNDONE
 
 /**
  * Shared journal upkeep for interrupted runs (audit A.3-4 / B.9): a run
@@ -78,21 +81,26 @@ val OperationState.isTerminal: Boolean
  * a new run starts) and by History's explicit "close as interrupted".
  */
 object JournalMaintenance {
-
     /** Operation states an interrupted run can be stuck in. */
-    val NON_FINAL_STATES: Set<OperationState> = setOf(
-        OperationState.PENDING,
-        OperationState.DIRS_READY,
-        OperationState.MOVING,
-        OperationState.COPYING,
-        OperationState.VERIFIED,
-    )
+    val NON_FINAL_STATES: Set<OperationState> =
+        setOf(
+            OperationState.PENDING,
+            OperationState.DIRS_READY,
+            OperationState.MOVING,
+            OperationState.COPYING,
+            OperationState.VERIFIED,
+        )
 
     /** Failure reason recorded on operations closed by [closeInterruptedRun]. */
     const val INTERRUPTED_REASON = "interrupted"
 
-    suspend fun closeInterruptedRun(journal: JournalStore, runId: String, finishedAt: Long) {
-        journal.operationsOf(runId)
+    suspend fun closeInterruptedRun(
+        journal: JournalStore,
+        runId: String,
+        finishedAt: Long,
+    ) {
+        journal
+            .operationsOf(runId)
             .filter { it.state in NON_FINAL_STATES }
             .forEach { op ->
                 journal.updateOperation(
@@ -109,8 +117,11 @@ object JournalMaintenance {
 /** Persistence port for the journal; Room implements it in core:data. */
 interface JournalStore {
     suspend fun createRun(run: RunRecord)
+
     suspend fun insertOperation(op: OperationRecord)
+
     suspend fun updateOperation(op: OperationRecord)
+
     suspend fun operationsOf(runId: String): List<OperationRecord>
 
     /**
@@ -121,10 +132,18 @@ interface JournalStore {
      * because it renders individual failed operations.
      */
     suspend fun operationSummary(runId: String): RunOperationSummary
+
     suspend fun run(id: String): RunRecord?
+
     suspend fun recentRuns(limit: Int): List<RunRecord>
-    suspend fun markRunFinished(runId: String, finishedAt: Long)
+
+    suspend fun markRunFinished(
+        runId: String,
+        finishedAt: Long,
+    )
+
     suspend fun markRunUndone(runId: String)
+
     suspend fun unfinishedRuns(): List<RunRecord>
 }
 
@@ -145,29 +164,32 @@ class InMemoryJournalStore : JournalStore {
         ops[op.id] = op
     }
 
-    override suspend fun operationsOf(runId: String): List<OperationRecord> =
-        ops.values.filter { it.runId == runId }
+    override suspend fun operationsOf(runId: String): List<OperationRecord> = ops.values.filter { it.runId == runId }
 
     override suspend fun operationSummary(runId: String): RunOperationSummary {
         val runOps = ops.values.filter { it.runId == runId }
-        val bestByItem = runOps
-            .filter { !it.isCompanion && !it.isPoster }
-            .groupBy({ it.itemId }, { it.state })
-            .mapValues { (_, states) -> bestStateOf(states) ?: OperationState.PENDING }
+        val bestByItem =
+            runOps
+                .filter { !it.isCompanion && !it.isPoster }
+                .groupBy({ it.itemId }, { it.state })
+                .mapValues { (_, states) -> bestStateOf(states) ?: OperationState.PENDING }
         return RunOperationSummary(
             bestStateByItem = bestByItem,
-            postersDone = runOps.count {
-                it.isPoster && it.state == OperationState.DONE
-            },
+            postersDone =
+                runOps.count {
+                    it.isPoster && it.state == OperationState.DONE
+                },
         )
     }
 
     override suspend fun run(id: String): RunRecord? = runs[id]
 
-    override suspend fun recentRuns(limit: Int): List<RunRecord> =
-        runs.values.sortedByDescending { it.startedAt }.take(limit)
+    override suspend fun recentRuns(limit: Int): List<RunRecord> = runs.values.sortedByDescending { it.startedAt }.take(limit)
 
-    override suspend fun markRunFinished(runId: String, finishedAt: Long) {
+    override suspend fun markRunFinished(
+        runId: String,
+        finishedAt: Long,
+    ) {
         runs[runId]?.let { runs[runId] = it.copy(finishedAt = finishedAt) }
     }
 
@@ -175,6 +197,5 @@ class InMemoryJournalStore : JournalStore {
         runs[runId]?.let { runs[runId] = it.copy(undone = true) }
     }
 
-    override suspend fun unfinishedRuns(): List<RunRecord> =
-        runs.values.filter { it.finishedAt == null }
+    override suspend fun unfinishedRuns(): List<RunRecord> = runs.values.filter { it.finishedAt == null }
 }

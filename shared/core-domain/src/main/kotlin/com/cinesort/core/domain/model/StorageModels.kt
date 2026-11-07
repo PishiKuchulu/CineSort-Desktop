@@ -41,8 +41,21 @@ data class ScannedFile(
 )
 
 sealed interface ScanEvent {
-    data class Progress(val scannedEntries: Int) : ScanEvent
-    data class Found(val item: ScannedFile) : ScanEvent
-    data class Skipped(val name: String, val reason: String) : ScanEvent
-    data class Failed(val name: String, val reason: String) : ScanEvent
+    data class Progress(
+        val scannedEntries: Int,
+    ) : ScanEvent
+
+    data class Found(
+        val item: ScannedFile,
+    ) : ScanEvent
+
+    data class Skipped(
+        val name: String,
+        val reason: String,
+    ) : ScanEvent
+
+    data class Failed(
+        val name: String,
+        val reason: String,
+    ) : ScanEvent
 }

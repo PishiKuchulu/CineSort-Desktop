@@ -1,9 +1,9 @@
 package com.cinesort.core.parser
 
-import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import kotlin.random.Random
 
 /**
  * Robustness fuzz for the parser (audit 2026-10-31): random release-name-shaped
@@ -11,13 +11,46 @@ import org.junit.jupiter.api.Test
  * never contain leftover path separators or be blank for Movie/Episode.
  */
 class ParserFuzzTest {
-
-    private val tokens = listOf(
-        "The", "Movie", "2024", "1999", "S01E02", "s3e10", "1x05", "1080p", "2160p",
-        "BluRay", "WEB-DL", "x264", "HEVC", "Farsi", "Dubbed", "HDR10+", "Season.2",
-        "E07", "12", "007", "2049", "..", "__", "--", "[]", "()", "فیلم", "سریال",
-        "Part.2", "CD1", "PROPER", "10bit", "REMUX", "a", "I", "of", "the",
-    )
+    private val tokens =
+        listOf(
+            "The",
+            "Movie",
+            "2024",
+            "1999",
+            "S01E02",
+            "s3e10",
+            "1x05",
+            "1080p",
+            "2160p",
+            "BluRay",
+            "WEB-DL",
+            "x264",
+            "HEVC",
+            "Farsi",
+            "Dubbed",
+            "HDR10+",
+            "Season.2",
+            "E07",
+            "12",
+            "007",
+            "2049",
+            "..",
+            "__",
+            "--",
+            "[]",
+            "()",
+            "فیلم",
+            "سریال",
+            "Part.2",
+            "CD1",
+            "PROPER",
+            "10bit",
+            "REMUX",
+            "a",
+            "I",
+            "of",
+            "the",
+        )
     private val seps = listOf(".", " ", "_", "-", ".-", ". ", "")
 
     private fun randomName(random: Random): String {
@@ -50,5 +83,4 @@ class ParserFuzzTest {
             }
         }
     }
-
 }

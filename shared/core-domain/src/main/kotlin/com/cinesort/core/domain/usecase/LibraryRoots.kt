@@ -21,6 +21,7 @@ class EnsureLibraryRootsUseCase(
     suspend operator fun invoke(destination: DirRef): LibraryRootsResult {
         val created = mutableListOf<String>()
         val found = mutableListOf<String>()
+
         suspend fun ensure(name: String): DirRef {
             val existing = gateway.findChildDir(destination, name, ignoreCase = true)
             return if (existing != null) {
@@ -41,7 +42,10 @@ class EnsureLibraryRootsUseCase(
 object FolderSetValidator {
     sealed interface Result {
         data object Ok : Result
-        data class Error(val message: String) : Result
+
+        data class Error(
+            val message: String,
+        ) : Result
     }
 
     fun validate(
@@ -60,7 +64,10 @@ object FolderSetValidator {
     }
 
     /** True when [child] is strictly inside [parent] in the same tree. */
-    fun isInside(childId: String, parentId: String): Boolean {
+    fun isInside(
+        childId: String,
+        parentId: String,
+    ): Boolean {
         // Callers pass full SAF content URIs while tests pass bare document ids
         // (review M4): normalize both to document ids before comparing, or the
         // segment comparison never matches real URIs.
@@ -99,11 +106,12 @@ object FolderSetValidator {
         var i = 0
         while (i < value.length) {
             val c = value[i]
-            val byte = if (c == '%' && i + 2 <= value.lastIndex) {
-                value.substring(i + 1, i + 3).toIntOrNull(16)
-            } else {
-                null
-            }
+            val byte =
+                if (c == '%' && i + 2 <= value.lastIndex) {
+                    value.substring(i + 1, i + 3).toIntOrNull(16)
+                } else {
+                    null
+                }
             if (byte != null) {
                 out.write(byte)
                 i += 3

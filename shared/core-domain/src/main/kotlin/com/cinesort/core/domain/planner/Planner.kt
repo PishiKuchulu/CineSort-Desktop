@@ -103,42 +103,52 @@ data class PlanInput(
  * The planner is a pure function (spec section 8.2): the preview equals what execution does.
  */
 class OrganizePlanner {
-
     fun plan(input: PlanInput): List<PlannedItem> {
         val overrideByKey = input.overrides.associateBy { it.normalizedKey }
-        val staged = unifyFolderNames(
-            input.items.map { stagedItem(it, input, overrideByKey) },
-        )
+        val companionOwners = assignCompanionOwners(input)
+        val staged =
+            unifyFolderNames(
+                input.items.map { stagedItem(it, input, overrideByKey, companionOwners) },
+            )
 
         // Conflict pass: duplicate target file paths among planned items.
         // Needs-review items have no real target (review M1): they never conflict
         // with each other and are never resolved into a destination-root move.
-        val targetCounts = staged.filter {
-            it.status != PlannedStatus.SKIPPED && it.status != PlannedStatus.NEEDS_REVIEW
-        }.groupingBy { it.targetPath }.eachCount()
+        val targetCounts =
+            staged
+                .filter {
+                    it.status != PlannedStatus.SKIPPED && it.status != PlannedStatus.NEEDS_REVIEW
+                }.groupingBy { it.targetPath }
+                .eachCount()
         val allTargets = staged.map { it.targetPath }.toSet()
         val handedOut = mutableSetOf<String>()
 
         return staged.map { item ->
-            val inactiveStatus = item.status == PlannedStatus.SKIPPED ||
-                item.status == PlannedStatus.ALREADY_ORGANIZED
-            val heldStatus = item.status == PlannedStatus.RECENTLY_MODIFIED ||
-                item.status == PlannedStatus.NEEDS_REVIEW
+            val inactiveStatus =
+                item.status == PlannedStatus.SKIPPED ||
+                    item.status == PlannedStatus.ALREADY_ORGANIZED
+            val heldStatus =
+                item.status == PlannedStatus.RECENTLY_MODIFIED ||
+                    item.status == PlannedStatus.NEEDS_REVIEW
             if (inactiveStatus || heldStatus) {
                 return@map item
             }
             val existsInDestination = item.targetPath in input.destination.files
             val duplicated = (targetCounts[item.targetPath] ?: 0) > 1
             if (!existsInDestination && !duplicated) return@map item
-            val withContext = if (existsInDestination) {
-                item.copy(existingTarget = input.destination.fileDetails[item.targetPath])
-            } else {
-                item
-            }
+            val withContext =
+                if (existsInDestination) {
+                    item.copy(existingTarget = input.destination.fileDetails[item.targetPath])
+                } else {
+                    item
+                }
             // Keep-both among source duplicates only (review M2): the first item
             // keeps the plain name; only later ones are suffixed.
-            val keepBothFirstDuplicate = input.conflictChoices[item.id] == ConflictChoice.KEEP_BOTH &&
-                duplicated && !existsInDestination && item.targetPath !in handedOut
+            val keepBothFirstDuplicate =
+                input.conflictChoices[item.id] == ConflictChoice.KEEP_BOTH &&
+                    duplicated &&
+                    !existsInDestination &&
+                    item.targetPath !in handedOut
             if (keepBothFirstDuplicate) {
                 handedOut += item.targetPath
                 return@map withContext
@@ -173,9 +183,10 @@ class OrganizePlanner {
         destination: DestinationSnapshot,
     ): Long? {
         val free = destination.freeBytes ?: return null
-        val needed = planned
-            .filter { it.selected && it.status == PlannedStatus.READY && it.crossVolume }
-            .sumOf { it.sizeBytes }
+        val needed =
+            planned
+                .filter { it.selected && it.status == PlannedStatus.READY && it.crossVolume }
+                .sumOf { it.sizeBytes }
         return if (needed > free) needed - free else null
     }
 
@@ -248,16 +259,22 @@ class OrganizePlanner {
                 item
             } else {
                 item.copy(
-                    targetSegments = listOf(item.targetSegments[0], folder) +
-                        item.targetSegments.drop(2),
+                    targetSegments =
+                        listOf(item.targetSegments[0], folder) +
+                            item.targetSegments.drop(2),
                 )
             }
         }
     }
 
     /** Renames companions to the suffixed base of a keep-both rename (review M2). */
-    private fun renameCompanions(item: PlannedItem, candidate: String): List<FileRef> {
-        val base = item.scanned.file.name.substringBeforeLast('.', "")
+    private fun renameCompanions(
+        item: PlannedItem,
+        candidate: String,
+    ): List<FileRef> {
+        val base =
+            item.scanned.file.name
+                .substringBeforeLast('.', "")
         if (base.isEmpty()) return item.companions
         val newBase = candidate.substringBeforeLast('.', "")
         return item.companions.map { companion ->
@@ -275,19 +292,21 @@ class OrganizePlanner {
         existsInDestination: Boolean,
         allTargets: Set<String>,
         handedOut: Set<String>,
-    ): PlannedItem {
-        return when (input.conflictChoices[item.id]) {
-            ConflictChoice.SKIP -> item.copy(
-                status = PlannedStatus.SKIPPED,
-                selected = false,
-                skipReason = "conflict: skipped by user",
-            )
+    ): PlannedItem =
+        when (input.conflictChoices[item.id]) {
+            ConflictChoice.SKIP ->
+                item.copy(
+                    status = PlannedStatus.SKIPPED,
+                    selected = false,
+                    skipReason = "conflict: skipped by user",
+                )
             ConflictChoice.KEEP_BOTH -> {
-                val taken = buildSet {
-                    addAll(input.destination.files)
-                    addAll(allTargets)
-                    addAll(handedOut)
-                }
+                val taken =
+                    buildSet {
+                        addAll(input.destination.files)
+                        addAll(allTargets)
+                        addAll(handedOut)
+                    }
                 var n = 1
                 var candidate: String
                 do {
@@ -310,9 +329,11 @@ class OrganizePlanner {
             }
             null -> item.copy(status = PlannedStatus.CONFLICT, selected = false)
         }
-    }
 
-    private fun suffixedName(name: String, n: Int): String {
+    private fun suffixedName(
+        name: String,
+        n: Int,
+    ): String {
         val dot = name.lastIndexOf('.')
         return if (dot > 0) {
             name.substring(0, dot) + " ($n)" + name.substring(dot)
@@ -321,31 +342,76 @@ class OrganizePlanner {
         }
     }
 
+    /**
+     * Companion ownership (external audit 2026-11-07, AUD-002): a companion
+     * file belongs to exactly ONE video in its folder — the one with the
+     * longest matching base name (the most specific match), ties broken by
+     * file id so the assignment is deterministic. Before this pass each item
+     * filtered its siblings independently, so two prefix-related videos
+     * ("Show.S01E01.mkv" and "Show.S01E01.1080p.mkv") both claimed the same
+     * subtitle; the executor moved it for the first item and the second item
+     * was reported FAILED ("file not found") although its video had moved
+     * correctly, and its retry could never succeed.
+     *
+     * Returns a map of companion file id → owning video file id.
+     */
+    private fun assignCompanionOwners(input: PlanInput): Map<String, String> {
+        if (!input.scanSettings.moveCompanions) return emptyMap()
+        val owner = mutableMapOf<String, String>()
+        val ownerBaseLength = mutableMapOf<String, Int>()
+        for (item in input.items) {
+            val videoBaseLength =
+                item.file.name
+                    .substringBeforeLast('.', item.file.name)
+                    .length
+            for (sibling in item.siblings) {
+                if (!ScanRules.isCompanionOf(sibling.name, item.file.name, input.scanSettings)) {
+                    continue
+                }
+                val currentLength = ownerBaseLength[sibling.id]
+                val currentOwner = owner[sibling.id]
+                if (
+                    currentOwner == null ||
+                    videoBaseLength > (currentLength ?: -1) ||
+                    (videoBaseLength == currentLength && item.file.id < currentOwner)
+                ) {
+                    owner[sibling.id] = item.file.id
+                    ownerBaseLength[sibling.id] = videoBaseLength
+                }
+            }
+        }
+        return owner
+    }
+
     private fun stagedItem(
         scanned: ScannedFile,
         input: PlanInput,
         overrideByKey: Map<String, TitleOverride>,
+        companionOwners: Map<String, String>,
     ): PlannedItem {
         val raw = input.parseResults[scanned.file.id]
-        val companions = if (input.scanSettings.moveCompanions) {
-            scanned.siblings.filter {
-                ScanRules.isCompanionOf(it.name, scanned.file.name, input.scanSettings)
+        val companions =
+            if (input.scanSettings.moveCompanions) {
+                scanned.siblings.filter {
+                    ScanRules.isCompanionOf(it.name, scanned.file.name, input.scanSettings) &&
+                        companionOwners[it.id] == scanned.file.id
+                }
+            } else {
+                emptyList()
             }
-        } else {
-            emptyList()
-        }
-        val base = PlannedItem(
-            id = scanned.file.id,
-            scanned = scanned,
-            companions = companions,
-            effective = null,
-            type = null,
-            targetSegments = emptyList(),
-            targetFileName = scanned.file.name,
-            status = PlannedStatus.NEEDS_REVIEW,
-            selected = false,
-            crossVolume = scanned.sourceVolume != input.destination.volume,
-        )
+        val base =
+            PlannedItem(
+                id = scanned.file.id,
+                scanned = scanned,
+                companions = companions,
+                effective = null,
+                type = null,
+                targetSegments = emptyList(),
+                targetFileName = scanned.file.name,
+                status = PlannedStatus.NEEDS_REVIEW,
+                selected = false,
+                crossVolume = scanned.sourceVolume != input.destination.volume,
+            )
 
         if (scanned.file.id in input.recentlyModifiedIds) {
             return base.copy(status = PlannedStatus.RECENTLY_MODIFIED)
@@ -355,18 +421,20 @@ class OrganizePlanner {
             // keys such overrides by the normalized file-name base (spec 6.6). Only
             // movie overrides can be synthesized — an episode override carries no
             // season/episode numbers, so those stay in Needs review.
-            val rescueKey = NormalizedKey.of(
-                scanned.file.name.substringBeforeLast('.', scanned.file.name),
-            )
+            val rescueKey =
+                NormalizedKey.of(
+                    scanned.file.name.substringBeforeLast('.', scanned.file.name),
+                )
             val rescue = overrideByKey[rescueKey]
             if (raw != null && rescue != null && rescue.type == ItemType.MOVIE) {
-                val rescued = ParseResult.Movie(
-                    fileName = raw.fileName,
-                    title = rescue.correctedTitle,
-                    year = rescue.correctedYear,
-                    confidence = com.cinesort.core.parser.Confidence.MEDIUM,
-                    trace = raw.trace,
-                )
+                val rescued =
+                    ParseResult.Movie(
+                        fileName = raw.fileName,
+                        title = rescue.correctedTitle,
+                        year = rescue.correctedYear,
+                        confidence = com.cinesort.core.parser.Confidence.MEDIUM,
+                        trace = raw.trace,
+                    )
                 return stageMovie(base, scanned, rescued, input)
             }
             return base.copy(warnings = listOf("unrecognized"))
@@ -400,14 +468,16 @@ class OrganizePlanner {
         val override = overrideByKey[key] ?: return raw
         if (override.type != type) return raw
         return when (raw) {
-            is ParseResult.Movie -> raw.copy(
-                title = override.correctedTitle,
-                year = override.correctedYear ?: raw.year,
-            )
-            is ParseResult.Episode -> raw.copy(
-                seriesTitle = override.correctedTitle,
-                seriesYearHint = override.correctedYear ?: raw.seriesYearHint,
-            )
+            is ParseResult.Movie ->
+                raw.copy(
+                    title = override.correctedTitle,
+                    year = override.correctedYear ?: raw.year,
+                )
+            is ParseResult.Episode ->
+                raw.copy(
+                    seriesTitle = override.correctedTitle,
+                    seriesYearHint = override.correctedYear ?: raw.seriesYearHint,
+                )
             is ParseResult.Unrecognized -> raw
         }
     }
@@ -420,15 +490,17 @@ class OrganizePlanner {
     ): PlannedItem {
         val key = NormalizedKey.movieKey(movie.title, movie.year)
         val metadata = input.metadataByKey[key]
-        val effectiveYear = movie.year
-            ?: if (input.naming.fillMissingYear) metadata?.year else null
-        val folderName = FolderNamer.movieFolderName(
-            title = movie.title,
-            year = effectiveYear,
-            genres = metadata?.genres.orEmpty(),
-            rating = metadata?.rating,
-            options = input.naming,
-        )
+        val effectiveYear =
+            movie.year
+                ?: if (input.naming.fillMissingYear) metadata?.year else null
+        val folderName =
+            FolderNamer.movieFolderName(
+                title = movie.title,
+                year = effectiveYear,
+                genres = metadata?.genres.orEmpty(),
+                rating = metadata?.rating,
+                options = input.naming,
+            )
         // Reuse an existing folder whose decoration-stripped key matches (spec 7.3).
         // Movie keys include the year, so the year is compared separately against the
         // year decoration stripped from the existing folder name.
@@ -445,19 +517,21 @@ class OrganizePlanner {
     ): PlannedItem {
         val key = NormalizedKey.seriesKey(episode.seriesTitle)
         val metadata = input.metadataByKey[key]
-        val folderName = FolderNamer.seriesFolderName(
-            title = episode.seriesTitle,
-            year = episode.seriesYearHint,
-            genres = metadata?.genres.orEmpty(),
-            rating = metadata?.rating,
-            options = input.naming,
-        )
+        val folderName =
+            FolderNamer.seriesFolderName(
+                title = episode.seriesTitle,
+                year = episode.seriesYearHint,
+                genres = metadata?.genres.orEmpty(),
+                rating = metadata?.rating,
+                options = input.naming,
+            )
         val existing = findExisting(input.destination, FolderNamer.SERIES_ROOT, key)
-        val segments = listOf(
-            FolderNamer.SERIES_ROOT,
-            existing ?: folderName,
-            FolderNamer.seasonFolderName(episode.season),
-        )
+        val segments =
+            listOf(
+                FolderNamer.SERIES_ROOT,
+                existing ?: folderName,
+                FolderNamer.seasonFolderName(episode.season),
+            )
         return finishStaging(base, scanned, episode, ItemType.EPISODE, segments, metadata)
     }
 
@@ -470,19 +544,33 @@ class OrganizePlanner {
         metadata: MetadataInfo?,
     ): PlannedItem {
         val confidence = effective.confidence
-        val alreadyThere = scanned.locationInDestination != null &&
-            scanned.locationInDestination == segments
-        val status = when {
-            alreadyThere -> PlannedStatus.ALREADY_ORGANIZED
-            confidence == Confidence.LOW -> PlannedStatus.NEEDS_REVIEW
-            else -> PlannedStatus.READY
-        }
+        val alreadyThere =
+            scanned.locationInDestination != null &&
+                scanned.locationInDestination == segments
+        // A title that sanitizes to nothing (external audit 2026-11-07,
+        // AUD-003: an edit-sheet title of "." or "***") would otherwise
+        // produce an empty path segment and a provider-dependent failure
+        // mid-run; hold the item for review instead.
+        val emptyFolder = segments.getOrNull(1).isNullOrBlank()
+        val status =
+            when {
+                emptyFolder -> PlannedStatus.NEEDS_REVIEW
+                alreadyThere -> PlannedStatus.ALREADY_ORGANIZED
+                confidence == Confidence.LOW -> PlannedStatus.NEEDS_REVIEW
+                else -> PlannedStatus.READY
+            }
         return base.copy(
             effective = effective,
             type = type,
             targetSegments = segments,
             status = status,
             selected = status == PlannedStatus.READY,
+            warnings =
+                if (emptyFolder) {
+                    base.warnings + "naming: title produces an empty folder name"
+                } else {
+                    base.warnings
+                },
             metadata = metadata,
         )
     }
@@ -492,13 +580,12 @@ class OrganizePlanner {
         destination: DestinationSnapshot,
         root: String,
         key: String,
-    ): String? {
-        return destination.folders
+    ): String? =
+        destination.folders
             .map { it.split('/') }
             .filter { it.size == 2 && it[0] == root }
             .map { it[1] }
             .firstOrNull { ExistingFolderMatcher.matches(it, key) }
-    }
 
     private val folderYearRegex = Regex("""\(((?:19|20)\d{2})\)""")
 
@@ -519,7 +606,12 @@ class OrganizePlanner {
                 if (!ExistingFolderMatcher.matches(folderName, titleKey)) {
                     false
                 } else {
-                    val folderYear = folderYearRegex.find(folderName)?.groupValues?.get(1)?.toInt()
+                    val folderYear =
+                        folderYearRegex
+                            .find(folderName)
+                            ?.groupValues
+                            ?.get(1)
+                            ?.toInt()
                     folderYear == null || year == null || folderYear == year
                 }
             }

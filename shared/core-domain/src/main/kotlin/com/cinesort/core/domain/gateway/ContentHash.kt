@@ -10,7 +10,6 @@ import java.security.MessageDigest
  * provider) through right before the executor deletes the source.
  */
 object ContentHash {
-
     fun newDigest(): MessageDigest = MessageDigest.getInstance("SHA-256")
 
     /** Lowercase hex of a finished digest. */

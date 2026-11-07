@@ -19,22 +19,28 @@ data class NamingOptions(
 object NameSanitizer {
     private const val MAX_BYTES = 240
 
-    /** Spec section 7.4 sanitization (without the length cap; see [limitFolderName]). */
     // Invisible format controls stripped from names (review L5): bidi embedding /
     // override / isolate controls and zero-width spaces can make a folder display
     // as a different name than it is. ZWNJ/ZWJ are KEPT — Persian orthography
     // (and emoji sequences) need them.
     private fun isInvisibleFormat(c: Char): Boolean =
-        c == '\u200B' || // zero-width space
-            c == '\u200E' || // left-to-right mark
-            c == '\u200F' || // right-to-left mark
-            c == '\u061C' || // arabic letter mark
-            c in '\u202A'..'\u202E' || // bidi embeddings / overrides
-            c in '\u2066'..'\u2069' || // bidi isolates
+        c == '\u200B' ||
+            // zero-width space
+            c == '\u200E' ||
+            // left-to-right mark
+            c == '\u200F' ||
+            // right-to-left mark
+            c == '\u061C' ||
+            // arabic letter mark
+            c in '\u202A'..'\u202E' ||
+            // bidi embeddings / overrides
+            c in '\u2066'..'\u2069' ||
+            // bidi isolates
             c == '\uFEFF' // byte-order mark / zero-width no-break space
 
     private val whitespaceRun = Regex("""\s+""")
 
+    /** Spec section 7.4 sanitization (without the length cap; see [limitFolderName]). */
     fun sanitize(raw: String): String {
         val sb = StringBuilder()
         for (c in raw) {
@@ -42,8 +48,14 @@ object NameSanitizer {
                 isInvisibleFormat(c) -> Unit // removed
                 c == ':' -> sb.append(" -")
                 c == '/' -> sb.append('-')
-                c == '\\' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' ||
-                    c == '|' || c.isISOControl() -> Unit // removed
+                c == '\\' ||
+                    c == '*' ||
+                    c == '?' ||
+                    c == '"' ||
+                    c == '<' ||
+                    c == '>' ||
+                    c == '|' ||
+                    c.isISOControl() -> Unit // removed
                 else -> sb.append(c)
             }
         }
@@ -64,7 +76,11 @@ object NameSanitizer {
         genresPart: String,
         ratingPart: String,
     ): String {
-        fun assemble(t: String, g: String, r: String) = sanitize(t + yearPart + g + r)
+        fun assemble(
+            t: String,
+            g: String,
+            r: String,
+        ) = sanitize(t + yearPart + g + r)
         val full = assemble(title, genresPart, ratingPart)
         if (utf8Length(full) <= MAX_BYTES) return full
         val noGenres = assemble(title, "", ratingPart)
@@ -75,13 +91,14 @@ object NameSanitizer {
         var truncated = title
         while (truncated.isNotEmpty() && utf8Length(assemble(truncated, "", "")) > MAX_BYTES) {
             val cut = truncated.lastIndexOf(' ')
-            truncated = if (cut > 0) {
-                truncated.substring(0, cut)
-            } else {
-                // Drop the last code point, never half of a surrogate pair (review L5).
-                val drop = if (truncated.last().isLowSurrogate() && truncated.length >= 2) 2 else 1
-                truncated.dropLast(drop)
-            }
+            truncated =
+                if (cut > 0) {
+                    truncated.substring(0, cut)
+                } else {
+                    // Drop the last code point, never half of a surrogate pair (review L5).
+                    val drop = if (truncated.last().isLowSurrogate() && truncated.length >= 2) 2 else 1
+                    truncated.dropLast(drop)
+                }
         }
         return assemble(truncated, "", "")
     }
@@ -92,11 +109,9 @@ object FolderNamer {
     const val SERIES_ROOT = "Tv series"
 
     /** Rating format: exactly one decimal, dot separator, ASCII digits (spec 7.1). */
-    fun formatRating(rating: Double): String =
-        String.format(Locale.ROOT, "%.1f", rating)
+    fun formatRating(rating: Double): String = String.format(Locale.ROOT, "%.1f", rating)
 
-    fun seasonFolderName(season: Int): String =
-        if (season in 0..99) "S" + season.toString().padStart(2, '0') else "S$season"
+    fun seasonFolderName(season: Int): String = if (season in 0..99) "S" + season.toString().padStart(2, '0') else "S$season"
 
     fun movieFolderName(
         title: String,
@@ -106,16 +121,18 @@ object FolderNamer {
         options: NamingOptions,
     ): String {
         val yearPart = if (options.movieAddYear && year != null) " ($year)" else ""
-        val genresPart = if (options.movieAddGenres && genres.isNotEmpty()) {
-            " (" + genres.take(options.maxGenres.coerceIn(1, 6)).joinToString(", ") + ")"
-        } else {
-            ""
-        }
-        val ratingPart = if (options.movieAddRating && rating != null) {
-            " " + formatRating(rating)
-        } else {
-            ""
-        }
+        val genresPart =
+            if (options.movieAddGenres && genres.isNotEmpty()) {
+                " (" + genres.take(options.maxGenres.coerceIn(1, 6)).joinToString(", ") + ")"
+            } else {
+                ""
+            }
+        val ratingPart =
+            if (options.movieAddRating && rating != null) {
+                " " + formatRating(rating)
+            } else {
+                ""
+            }
         return NameSanitizer.limitFolderName(NameSanitizer.sanitize(title), yearPart, genresPart, ratingPart)
     }
 
@@ -127,16 +144,18 @@ object FolderNamer {
         options: NamingOptions,
     ): String {
         val yearPart = if (options.seriesAddYear && year != null) " ($year)" else ""
-        val genresPart = if (options.seriesAddGenres && genres.isNotEmpty()) {
-            " (" + genres.take(options.maxGenres.coerceIn(1, 6)).joinToString(", ") + ")"
-        } else {
-            ""
-        }
-        val ratingPart = if (options.seriesAddRating && rating != null) {
-            " " + formatRating(rating)
-        } else {
-            ""
-        }
+        val genresPart =
+            if (options.seriesAddGenres && genres.isNotEmpty()) {
+                " (" + genres.take(options.maxGenres.coerceIn(1, 6)).joinToString(", ") + ")"
+            } else {
+                ""
+            }
+        val ratingPart =
+            if (options.seriesAddRating && rating != null) {
+                " " + formatRating(rating)
+            } else {
+                ""
+            }
         return NameSanitizer.limitFolderName(NameSanitizer.sanitize(title), yearPart, genresPart, ratingPart)
     }
 }

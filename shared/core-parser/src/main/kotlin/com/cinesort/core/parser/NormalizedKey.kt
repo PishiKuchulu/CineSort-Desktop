@@ -19,16 +19,17 @@ object NormalizedKey {
         return stripped.map { foldChar(it) }.joinToString("").filter { it.isLetterOrDigit() }
     }
 
-    private fun foldChar(c: Char): Char = when (c) {
-        'ي' -> 'ی' // Arabic Yeh -> Persian Yeh
-        'ك' -> 'ک' // Arabic Kaf -> Persian Kaf
-        'ة' -> 'ه' // Teh Marbuta -> Heh
-        'ؤ' -> 'و'
-        'إ', 'أ' -> 'ا'
-        in '۰'..'۹' -> '0' + (c - '۰') // Persian digits
-        in '٠'..'٩' -> '0' + (c - '٠') // Arabic-Indic digits
-        else -> c
-    }
+    private fun foldChar(c: Char): Char =
+        when (c) {
+            'ي' -> 'ی' // Arabic Yeh -> Persian Yeh
+            'ك' -> 'ک' // Arabic Kaf -> Persian Kaf
+            'ة' -> 'ه' // Teh Marbuta -> Heh
+            'ؤ' -> 'و'
+            'إ', 'أ' -> 'ا'
+            in '۰'..'۹' -> '0' + (c - '۰') // Persian digits
+            in '٠'..'٩' -> '0' + (c - '٠') // Arabic-Indic digits
+            else -> c
+        }
 
     /** Folds Persian/Arabic-Indic digits in [value] to ASCII digits. */
     fun foldDigits(value: String): String = value.map { foldChar(it) }.joinToString("")

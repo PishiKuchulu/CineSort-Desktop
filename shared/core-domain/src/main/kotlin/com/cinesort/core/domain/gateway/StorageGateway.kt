@@ -20,6 +20,7 @@ interface StorageGateway {
     ): Flow<ScanEvent>
 
     suspend fun listChildren(dir: DirRef): List<EntryInfo>
+
     suspend fun findChildDir(
         parent: DirRef,
         name: String,
@@ -53,11 +54,19 @@ interface StorageGateway {
     ): FileRef
 
     /** Creates a small file with [content] inside [dir] (poster downloads, spec addendum). */
-    suspend fun createFile(dir: DirRef, name: String, mimeType: String, content: ByteArray): FileRef
+    suspend fun createFile(
+        dir: DirRef,
+        name: String,
+        mimeType: String,
+        content: ByteArray,
+    ): FileRef
 
     suspend fun delete(ref: Ref)
+
     suspend fun volumeIdOf(ref: Ref): String
+
     suspend fun freeBytes(dir: DirRef): Long?
+
     suspend fun isValid(dir: DirRef): Boolean
 
     /**

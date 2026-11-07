@@ -10,9 +10,9 @@ import com.cinesort.core.domain.model.DirRef
 import com.cinesort.core.domain.model.FileRef
 import com.cinesort.core.domain.planner.PlannedItem
 import com.cinesort.core.domain.planner.PlannedStatus
-import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
+import java.util.UUID
 import kotlin.coroutines.coroutineContext
 
 data class ExecutionProgress(
@@ -75,18 +75,20 @@ class OrganizeExecutor(
         // executor is the run's only journal writer while it executes
         // (posters are journaled by the worker after execute returns),
         // so the index can never drift from the persisted journal.
-        val opsIndex = journal.operationsOf(runId)
-            .groupByTo(mutableMapOf()) { it.itemId }
-            .mapValuesTo(mutableMapOf()) { (_, ops) -> ops.toMutableList() }
+        val opsIndex =
+            journal
+                .operationsOf(runId)
+                .groupByTo(mutableMapOf()) { it.itemId }
+                .mapValuesTo(mutableMapOf()) { (_, ops) -> ops.toMutableList() }
         // Resume hygiene (reviews H8/M5): operations left in a non-final state by
         // an interrupted earlier attempt of this same run are closed as FAILED, so
         // the report never shows phantom in-progress rows. Terminal states —
         // including SKIPPED and UNDONE — are never rewritten.
-        opsIndex.values.flatten()
+        opsIndex.values
+            .flatten()
             .filter {
                 it.itemId in runnableIds && it.state in JournalMaintenance.NON_FINAL_STATES
-            }
-            .forEach {
+            }.forEach {
                 updateOp(
                     opsIndex,
                     it.copy(
@@ -101,7 +103,8 @@ class OrganizeExecutor(
         // was permanently zero and the only skip tally lived in this
         // in-memory report. One main row per skipped item; rows an earlier
         // attempt already wrote are left alone.
-        items.filter { it.id !in runnableIds && it.id !in opsIndex }
+        items
+            .filter { it.id !in runnableIds && it.id !in opsIndex }
             .forEach { item ->
                 insertOp(
                     opsIndex,
@@ -127,9 +130,10 @@ class OrganizeExecutor(
         // whose video op is DONE but whose companion op FAILED must not re-run
         // the video move — its source is gone, so the move would fail and the
         // companion would never be retried.
-        val doneOpsByItem = opsIndex.mapValues { (_, ops) ->
-            ops.filter { it.state == OperationState.DONE }
-        }
+        val doneOpsByItem =
+            opsIndex.mapValues { (_, ops) ->
+                ops.filter { it.state == OperationState.DONE }
+            }
         val bytesTotal = runnable.sumOf { it.sizeBytes }
         var bytesDone = 0L
         var done = 0
@@ -176,15 +180,25 @@ class OrganizeExecutor(
         val targetDir = ensureDirs(item.targetSegments, dirCache, createdDirs)
         if (!isAlreadyDone(doneOps, item.scanned.file, isCompanion = false)) {
             moveOne(
-                item.scanned.file, item, targetDir, runId, createdDirs,
-                isCompanion = false, opsIndex = opsIndex,
+                item.scanned.file,
+                item,
+                targetDir,
+                runId,
+                createdDirs,
+                isCompanion = false,
+                opsIndex = opsIndex,
             )
         }
         for (companion in item.companions) {
             if (!isAlreadyDone(doneOps, companion, isCompanion = true)) {
                 moveOne(
-                    companion, item, targetDir, runId, createdDirs,
-                    isCompanion = true, opsIndex = opsIndex,
+                    companion,
+                    item,
+                    targetDir,
+                    runId,
+                    createdDirs,
+                    isCompanion = true,
+                    opsIndex = opsIndex,
                 )
             }
         }
@@ -199,10 +213,11 @@ class OrganizeExecutor(
         doneOps: List<OperationRecord>,
         file: FileRef,
         isCompanion: Boolean,
-    ): Boolean = doneOps.any { op ->
-        op.isCompanion == isCompanion &&
-            (op.sourceFileId == file.id || (op.sourceFileId.isEmpty() && op.fileName == file.name))
-    }
+    ): Boolean =
+        doneOps.any { op ->
+            op.isCompanion == isCompanion &&
+                (op.sourceFileId == file.id || (op.sourceFileId.isEmpty() && op.fileName == file.name))
+        }
 
     /**
      * Persists an item's failure in the journal (review M5): unfinished operations
@@ -223,9 +238,10 @@ class OrganizeExecutor(
         opsIndex: MutableMap<String, MutableList<OperationRecord>>,
     ) {
         val ops = opsIndex[item.id].orEmpty()
-        val unfinished = ops.filter {
-            it.state != OperationState.DONE && it.state != OperationState.FAILED
-        }
+        val unfinished =
+            ops.filter {
+                it.state != OperationState.DONE && it.state != OperationState.FAILED
+            }
         if (unfinished.isEmpty() && ops.none { !it.isCompanion }) {
             insertOp(
                 opsIndex,
@@ -266,22 +282,23 @@ class OrganizeExecutor(
         opsIndex: MutableMap<String, MutableList<OperationRecord>>,
     ) {
         val finalName = if (isCompanion) file.name else item.targetFileName
-        var op = OperationRecord(
-            id = idFactory(),
-            runId = runId,
-            itemId = item.id,
-            sourceParentId = file.parentId,
-            sourceParentName = item.scanned.parentDir.name,
-            sourceFileId = file.id,
-            fileName = file.name,
-            finalName = finalName,
-            destinationParentId = targetDir.id,
-            destinationSegments = item.targetSegments,
-            bytesTotal = file.size,
-            isCompanion = isCompanion,
-            createdDirs = createdDirs.toList(),
-            crossVolume = item.crossVolume,
-        )
+        var op =
+            OperationRecord(
+                id = idFactory(),
+                runId = runId,
+                itemId = item.id,
+                sourceParentId = file.parentId,
+                sourceParentName = item.scanned.parentDir.name,
+                sourceFileId = file.id,
+                fileName = file.name,
+                finalName = finalName,
+                destinationParentId = targetDir.id,
+                destinationSegments = item.targetSegments,
+                bytesTotal = file.size,
+                isCompanion = isCompanion,
+                createdDirs = createdDirs.toList(),
+                crossVolume = item.crossVolume,
+            )
         insertOp(opsIndex, op)
         op = op.copy(state = OperationState.DIRS_READY)
         updateOp(opsIndex, op)
@@ -373,12 +390,13 @@ class OrganizeExecutor(
                 continue
             }
             val existing = gateway.findChildDir(current, segment, ignoreCase = true)
-            current = if (existing != null) {
-                existing
-            } else {
-                createdDirs?.add(key)
-                gateway.createDir(current, segment)
-            }
+            current =
+                if (existing != null) {
+                    existing
+                } else {
+                    createdDirs?.add(key)
+                    gateway.createDir(current, segment)
+                }
             cache[key] = current
         }
         return current

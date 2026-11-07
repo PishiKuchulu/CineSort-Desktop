@@ -12,10 +12,22 @@ data class ScanSettings(
     val moveCompanions: Boolean = true,
 ) {
     companion object {
-        val DEFAULT_VIDEO_EXTENSIONS = setOf(
-            "mkv", "mp4", "avi", "mov", "wmv", "flv", "webm", "m4v", "ts", "m2ts", "mpg",
-            "mpeg", "3gp",
-        )
+        val DEFAULT_VIDEO_EXTENSIONS =
+            setOf(
+                "mkv",
+                "mp4",
+                "avi",
+                "mov",
+                "wmv",
+                "flv",
+                "webm",
+                "m4v",
+                "ts",
+                "m2ts",
+                "mpg",
+                "mpeg",
+                "3gp",
+            )
         val DEFAULT_COMPANION_EXTENSIONS = setOf("srt", "ass", "ssa", "sub", "vtt", "idx")
         val TEMP_EXTENSIONS = setOf("part", "crdownload", "tmp", "download", "!ut", "aria2")
         const val SAMPLE_SIZE_LIMIT: Long = 100L * 1024 * 1024
@@ -51,7 +63,9 @@ object ScanRules {
             lower.endsWith(".cinesort-part") || ext in ScanSettings.TEMP_EXTENSIONS ->
                 ScanDisposition.IGNORED_TEMP
             !isVideo && !isCompanion -> ScanDisposition.IGNORED_EXTENSION
-            isVideo && settings.ignoreSamples && size < ScanSettings.SAMPLE_SIZE_LIMIT &&
+            isVideo &&
+                settings.ignoreSamples &&
+                size < ScanSettings.SAMPLE_SIZE_LIMIT &&
                 hasSampleToken(name) -> ScanDisposition.IGNORED_SAMPLE
             // A future timestamp (clock skew on the source device) must not pin
             // the file as "recently modified" forever (review L3).
@@ -78,8 +92,10 @@ object ScanRules {
      * `sourceDepth ?: settingsDepth` and every stored source carries a
      * depth, so the Settings stepper never reached a single scan.
      */
-    fun effectiveDepth(sourceDepth: Int?, settingsDepth: Int): Int =
-        minOf(sourceDepth ?: settingsDepth, settingsDepth).coerceIn(1, 10)
+    fun effectiveDepth(
+        sourceDepth: Int?,
+        settingsDepth: Int,
+    ): Int = minOf(sourceDepth ?: settingsDepth, settingsDepth).coerceIn(1, 10)
 
     fun extensionOf(name: String): String = name.substringAfterLast('.', "").lowercase(Locale.ROOT)
 
